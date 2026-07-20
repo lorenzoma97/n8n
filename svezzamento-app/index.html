@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="it">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1, viewport-fit=cover"
+		/>
+		<meta name="theme-color" content="#4a8c6f" />
+		<meta
+			name="description"
+			content="App per seguire il calendario di svezzamento di 28 giorni: pasti, regole quotidiane, allergeni e note."
+		/>
+		<title>Svezzamento · Calendario 28 giorni</title>
+		<link rel="manifest" href="manifest.webmanifest" />
+		<link rel="icon" href="icon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="icon.svg" />
+		<link rel="stylesheet" href="styles.css" />
+	</head>
+	<body>
+		<header class="topbar">
+			<div class="topbar__inner">
+				<span class="topbar__logo" aria-hidden="true">🍼</span>
+				<div>
+					<div class="topbar__title">Svezzamento</div>
+					<div class="topbar__subtitle">Calendario 28 giorni · post-QA</div>
+				</div>
+			</div>
+		</header>
+
+		<nav class="nav" aria-label="Navigazione principale">
+			<button class="nav__btn" data-view="oggi" type="button">
+				<span class="ico" aria-hidden="true">☀️</span>
+				<span>Oggi</span>
+			</button>
+			<button class="nav__btn" data-view="calendario" type="button">
+				<span class="ico" aria-hidden="true">🗓️</span>
+				<span>Calendario</span>
+			</button>
+			<button class="nav__btn" data-view="allergeni" type="button">
+				<span class="ico" aria-hidden="true">⚠️</span>
+				<span>Allergeni</span>
+			</button>
+			<button class="nav__btn" data-view="guida" type="button">
+				<span class="ico" aria-hidden="true">📖</span>
+				<span>Guida</span>
+			</button>
+		</nav>
+
+		<main class="app">
+			<section id="view-oggi" class="view" aria-label="Oggi"></section>
+			<section id="view-calendario" class="view" aria-label="Calendario" hidden></section>
+			<section id="view-giorno" class="view" aria-label="Dettaglio giorno" hidden></section>
+			<section id="view-allergeni" class="view" aria-label="Allergeni" hidden></section>
+			<section id="view-guida" class="view" aria-label="Guida" hidden></section>
+		</main>
+
+		<script src="data.js"></script>
+		<script src="app.js"></script>
+	</body>
+</html>

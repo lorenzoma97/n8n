@@ -1,0 +1,20 @@
+{
+	"name": "Svezzamento — Calendario 28 giorni",
+	"short_name": "Svezzamento",
+	"description": "Segui il calendario di svezzamento: pasti, regole quotidiane, allergeni e note.",
+	"start_url": ".",
+	"scope": ".",
+	"display": "standalone",
+	"orientation": "portrait",
+	"background_color": "#f6f4ee",
+	"theme_color": "#4a8c6f",
+	"lang": "it",
+	"icons": [
+		{
+			"src": "icon.svg",
+			"type": "image/svg+xml",
+			"sizes": "any",
+			"purpose": "any maskable"
+		}
+	]
+}
