@@ -964,6 +964,70 @@ a {
 	border-bottom: none;
 }
 
+/* ---------- Etichette di sezione più chiare (accento) ---------- */
+.section-title {
+	color: var(--c-text-soft);
+	font-size: 12px;
+}
+.section-title::before {
+	content: '';
+	display: inline-block;
+	width: 3px;
+	height: 13px;
+	border-radius: 2px;
+	background: var(--c-primary);
+	margin-right: 8px;
+	vertical-align: -1px;
+	opacity: 0.8;
+}
+
+/* ---------- Card raggruppate (impostazioni) ---------- */
+.group {
+	background: var(--c-surface);
+	border: 1px solid var(--c-border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow-sm);
+	overflow: hidden;
+	margin-bottom: var(--sp-4);
+}
+.group__header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 13px 16px;
+	background: var(--c-surface-2);
+	border-bottom: 1px solid var(--c-border);
+}
+.group__header .gi {
+	font-size: 18px;
+	line-height: 1;
+}
+.group__header h3 {
+	font-size: 15px;
+}
+.group__header .gsub {
+	font-size: 12px;
+	color: var(--c-text-soft);
+}
+.group__body {
+	padding: 2px 16px;
+}
+.group__body.pad {
+	padding: 16px;
+}
+.group__body .seg {
+	margin-bottom: 0;
+}
+.group__body > .setting-row:last-child {
+	border-bottom: none;
+	padding-bottom: 0;
+}
+.group__body.pad > .setting-row:first-of-type {
+	border-top: 1px solid var(--c-border);
+	margin-top: 6px;
+	padding-top: 14px;
+}
+
 /* larger reaction chips for accessibility (tap target ~40px) */
 .chip-select button {
 	padding: 9px 13px;

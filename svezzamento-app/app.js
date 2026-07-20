@@ -999,11 +999,27 @@
 	}
 
 	/* ---------------- Render: IMPOSTAZIONI ---------------- */
+	/* Card raggruppata con intestazione (icona + titolo), stile "impostazioni". */
+	function groupCard(icon, title, bodyChildren, opts) {
+		opts = opts || {};
+		return el('div', { class: 'group' }, [
+			el('div', { class: 'group__header' }, [
+				el('span', { class: 'gi', 'aria-hidden': 'true' }, [icon]),
+				el('div', {}, [
+					el('h3', {}, [title]),
+					opts.subtitle ? el('div', { class: 'gsub' }, [opts.subtitle]) : null,
+				]),
+			]),
+			el('div', { class: 'group__body' + (opts.pad ? ' pad' : '') }, bodyChildren),
+		]);
+	}
+
 	function renderImpostazioni() {
 		const root = document.getElementById('view-impostazioni');
 		root.innerHTML = '';
+		const notifState = 'Notification' in window ? Notification.permission : 'unsupported';
 
-		/* Dimensione testo */
+		/* --- Aspetto --- */
 		const zoomBtn = (val, label) =>
 			el(
 				'button',
@@ -1018,32 +1034,36 @@
 				},
 				[label],
 			);
-		root.appendChild(el('div', { class: 'section-title' }, ['Dimensione testo']));
 		root.appendChild(
-			el('div', { class: 'card' }, [
-				el('div', { class: 'seg' }, [
-					zoomBtn(1, 'Normale'),
-					zoomBtn(1.15, 'Grande'),
-					zoomBtn(1.3, 'Molto grande'),
-				]),
-			]),
+			groupCard(
+				'🔎',
+				'Aspetto',
+				[
+					el('div', { class: 'gsub', style: 'margin-bottom:8px;' }, ['Dimensione del testo']),
+					el('div', { class: 'seg' }, [
+						zoomBtn(1, 'Normale'),
+						zoomBtn(1.15, 'Grande'),
+						zoomBtn(1.3, 'Molto grande'),
+					]),
+				],
+				{ pad: true },
+			),
 		);
 
-		/* Promemoria */
-		root.appendChild(el('div', { class: 'section-title' }, ['Promemoria']));
-		const notifState = 'Notification' in window ? Notification.permission : 'unsupported';
+		/* --- Promemoria e diario --- */
 		root.appendChild(
-			el('div', { class: 'card' }, [
-				el('p', { class: 'muted', style: 'margin-top:0;' }, [
-					'Ricevi un avviso del browser al termine dell\'osservazione allergene (funziona mentre l\'app è aperta o installata).',
-				]),
-				notifState === 'unsupported'
-					? el('p', { class: 'tiny' }, ['Notifiche non supportate su questo browser.'])
-					: el('div', { class: 'btn-row' }, [
-							el(
+			groupCard('🔔', 'Promemoria e diario', [
+				el('div', { class: 'setting-row' }, [
+					el('div', {}, [
+						el('strong', {}, ['Promemoria browser']),
+						el('div', { class: 'tiny' }, ['Avviso a fine osservazione allergene (ad app aperta o installata).']),
+					]),
+					notifState === 'unsupported'
+						? el('span', { class: 'tiny' }, ['Non supportato'])
+						: el(
 								'button',
 								{
-									class: 'btn btn--sm',
+									class: 'btn btn--sm' + (state.notif && notifState === 'granted' ? '' : ' btn--soft'),
 									onClick: async () => {
 										try {
 											const perm = await Notification.requestPermission();
@@ -1055,44 +1075,20 @@
 										render();
 									},
 								},
-								[state.notif && notifState === 'granted' ? '✅ Promemoria attivi' : 'Attiva promemoria'],
-							),
-					  ]),
-			]),
-		);
-
-		/* Diario per il pediatra */
-		root.appendChild(el('div', { class: 'section-title' }, ['Diario per il pediatra']));
-		root.appendChild(
-			el('div', { class: 'card' }, [
-				el('p', { class: 'muted', style: 'margin-top:0;' }, [
-					'Raccoglie reazioni agli allergeni e note giornaliere in una pagina stampabile (o da salvare in PDF).',
+								[state.notif && notifState === 'granted' ? '✅ Attivi' : 'Attiva'],
+						  ),
 				]),
-				el('div', { class: 'btn-row' }, [
-					el('button', { class: 'btn btn--sm', onClick: () => exportDiario() }, ['🖨️ Apri diario stampabile']),
+				el('div', { class: 'setting-row' }, [
+					el('div', {}, [
+						el('strong', {}, ['Diario per il pediatra']),
+						el('div', { class: 'tiny' }, ['Reazioni e note in una pagina stampabile (PDF).']),
+					]),
+					el('button', { class: 'btn btn--sm btn--soft', onClick: () => exportDiario() }, ['🖨️ Apri']),
 				]),
 			]),
 		);
 
-		/* Backup */
-		root.appendChild(el('div', { class: 'section-title' }, ['Backup dei dati']));
-		const importInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none;' });
-		importInput.addEventListener('change', (e) => importData(e.target.files && e.target.files[0]));
-		root.appendChild(
-			el('div', { class: 'card' }, [
-				el('p', { class: 'muted', style: 'margin-top:0;' }, [
-					'Esporta un file con tutti i tuoi dati (spunte, note, reazioni) per salvarli o passarli all\'altro genitore; poi importalo sull\'altro telefono.',
-				]),
-				el('div', { class: 'btn-row' }, [
-					el('button', { class: 'btn btn--sm', onClick: () => exportData() }, ['⬇️ Esporta dati']),
-					el('button', { class: 'btn btn--sm btn--soft', onClick: () => importInput.click() }, ['⬆️ Importa dati']),
-					importInput,
-				]),
-			]),
-		);
-
-		/* Piano — slittamenti (se salti o rimandi un giorno) */
-		root.appendChild(el('div', { class: 'section-title' }, ['Piano — se salti o rimandi un giorno']));
+		/* --- Piano --- */
 		const dayNow = currentDayNumber();
 		const dayInput = el('input', {
 			type: 'number',
@@ -1100,74 +1096,93 @@
 			max: String(TOTAL_DAYS),
 			value: String(dayNow || 1),
 			'aria-label': 'Numero del giorno di oggi',
-			style: 'width:72px;',
+			style: 'width:64px;',
 		});
 		root.appendChild(
-			el('div', { class: 'card' }, [
-				el('p', { class: 'muted', style: 'margin-top:0;' }, [
-					dayNow
-						? `Oggi sei al Giorno ${dayNow}. `
-						: state.startDate
-						? 'Il piano è fuori intervallo (non ancora iniziato o già concluso). '
-						: 'Imposta prima la data di inizio. ',
-					'Se la bambina è stata male o hai rimandato, sposta il piano: i giorni e i dati registrati restano invariati.',
-				]),
-				el('div', { class: 'btn-row' }, [
-					el(
-						'button',
-						{
-							class: 'btn btn--sm btn--soft',
-							title: 'Rimanda: oggi torna al giorno precedente',
-							disabled: state.startDate ? null : 'disabled',
-							onClick: () => shiftPlan(1),
-						},
-						['⏮ Posticipa 1 giorno'],
-					),
-					el(
-						'button',
-						{
-							class: 'btn btn--sm btn--soft',
-							title: 'Anticipa: oggi passa al giorno successivo',
-							disabled: state.startDate ? null : 'disabled',
-							onClick: () => shiftPlan(-1),
-						},
-						['⏭ Anticipa 1 giorno'],
-					),
-				]),
-				el('div', { class: 'setting-row', style: 'margin-top:6px;padding-top:14px;' }, [
-					el('div', {}, [
-						el('strong', {}, ['Segna oggi come giorno']),
-						el('div', { class: 'tiny' }, ['Riallinea il piano a dove sei davvero.']),
+			groupCard(
+				'🗓️',
+				'Piano',
+				[
+					el('p', { class: 'muted', style: 'margin:0 0 12px;' }, [
+						dayNow
+							? `Oggi sei al Giorno ${dayNow}. `
+							: state.startDate
+							? 'Piano fuori intervallo (non iniziato o concluso). '
+							: 'Imposta prima la data di inizio. ',
+						'Se salti o rimandi un giorno, sposta il piano: i dati registrati restano invariati.',
 					]),
-					el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [
-						dayInput,
-						el('button', { class: 'btn btn--sm', onClick: () => setTodayAsDay(dayInput.value) }, ['Imposta']),
+					el('div', { class: 'btn-row', style: 'margin-bottom:2px;' }, [
+						el(
+							'button',
+							{
+								class: 'btn btn--sm btn--soft',
+								title: 'Rimanda: oggi torna al giorno precedente',
+								disabled: state.startDate ? null : 'disabled',
+								onClick: () => shiftPlan(1),
+							},
+							['⏮ Posticipa 1 giorno'],
+						),
+						el(
+							'button',
+							{
+								class: 'btn btn--sm btn--soft',
+								title: 'Anticipa: oggi passa al giorno successivo',
+								disabled: state.startDate ? null : 'disabled',
+								onClick: () => shiftPlan(-1),
+							},
+							['⏭ Anticipa 1 giorno'],
+						),
 					]),
-				]),
-			]),
-		);
-
-		/* Data di inizio + reset */
-		root.appendChild(el('div', { class: 'section-title' }, ['Altro']));
-		root.appendChild(
-			el('div', { class: 'card' }, [
-				el('div', { class: 'setting-row' }, [
-					el('div', {}, [
-						el('strong', {}, ['Data di inizio']),
-						el('div', { class: 'tiny' }, [
-							state.startDate ? cap(formatDate(parseISO(state.startDate))) : 'Non impostata',
+					el('div', { class: 'setting-row' }, [
+						el('div', {}, [
+							el('strong', {}, ['Segna oggi come giorno']),
+							el('div', { class: 'tiny' }, ['Riallinea il piano a dove sei davvero.']),
+						]),
+						el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [
+							dayInput,
+							el('button', { class: 'btn btn--sm', onClick: () => setTodayAsDay(dayInput.value) }, ['Imposta']),
 						]),
 					]),
-					el('button', { class: 'btn btn--ghost btn--sm', onClick: () => changeStartDate() }, ['Cambia']),
-				]),
-				el('div', { class: 'setting-row' }, [
-					el('div', {}, [
-						el('strong', {}, ['Azzera tutti i dati']),
-						el('div', { class: 'tiny' }, ['Cancella spunte, note e reazioni. Irreversibile.']),
+					el('div', { class: 'setting-row' }, [
+						el('div', {}, [
+							el('strong', {}, ['Data di inizio']),
+							el('div', { class: 'tiny' }, [
+								state.startDate ? cap(formatDate(parseISO(state.startDate))) : 'Non impostata',
+							]),
+						]),
+						el('button', { class: 'btn btn--ghost btn--sm', onClick: () => changeStartDate() }, ['Cambia']),
 					]),
-					el('button', { class: 'btn btn--ghost btn--sm', onClick: () => resetData() }, ['Azzera']),
-				]),
-			]),
+				],
+				{ pad: true },
+			),
+		);
+
+		/* --- Dati e backup --- */
+		const importInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none;' });
+		importInput.addEventListener('change', (e) => importData(e.target.files && e.target.files[0]));
+		root.appendChild(
+			groupCard(
+				'💾',
+				'Dati e backup',
+				[
+					el('p', { class: 'muted', style: 'margin:0 0 12px;' }, [
+						'Esporta tutti i dati per salvarli o passarli all\'altro genitore; poi importali sull\'altro telefono.',
+					]),
+					el('div', { class: 'btn-row', style: 'margin-bottom:2px;' }, [
+						el('button', { class: 'btn btn--sm', onClick: () => exportData() }, ['⬇️ Esporta']),
+						el('button', { class: 'btn btn--sm btn--soft', onClick: () => importInput.click() }, ['⬆️ Importa']),
+						importInput,
+					]),
+					el('div', { class: 'setting-row' }, [
+						el('div', {}, [
+							el('strong', {}, ['Azzera tutti i dati']),
+							el('div', { class: 'tiny' }, ['Cancella spunte, note e reazioni. Irreversibile.']),
+						]),
+						el('button', { class: 'btn btn--ghost btn--sm', onClick: () => resetData() }, ['Azzera']),
+					]),
+				],
+				{ pad: true },
+			),
 		);
 
 		root.appendChild(
