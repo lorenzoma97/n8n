@@ -170,7 +170,7 @@
 	}
 
 	/* ---------------- Router ---------------- */
-	const views = ['oggi', 'calendario', 'spesa', 'allergeni', 'guida', 'giorno', 'impostazioni'];
+	const views = ['oggi', 'calendario', 'settimana', 'allergeni', 'guida', 'giorno', 'impostazioni'];
 	let currentView = 'oggi';
 
 	function navigate(view, opts) {
@@ -788,60 +788,165 @@
 		root.appendChild(renderDayContent(n, { hero: false }));
 	}
 
-	/* ---------------- Render: SPESA ---------------- */
-	function renderSpesa() {
-		const root = document.getElementById('view-spesa');
+	/* Etichetta breve di un pasto per la vista settimanale (colpo d'occhio) */
+	function mealShort(g, pastoId) {
+		const raw = g.pasti[pastoId];
+		if (!raw) return null;
+		const t = raw.toLowerCase();
+		if (pastoId === 'mattino') {
+			const nuovo = g.allergeni.find(
+				(a) => a.momento === 'mattino' && (a.tipo === 'nuovo' || a.tipo === 'escalation'),
+			);
+			if (nuovo) return { label: nuovo.nome, allergen: true };
+			const mant = g.allergeni.find((a) => a.momento === 'mattino');
+			if (mant && t.indexOf('latte') !== 0) return { label: mant.nome, allergen: false };
+			return { label: 'Latte' };
+		}
+		if (pastoId === 'pranzo') {
+			const parts = ['Pappa'];
+			if (t.includes('pesce')) parts.push('pesce');
+			else if (t.includes('carne')) parts.push('carne');
+			if (t.includes('legumi')) parts.push('legumi');
+			return { label: parts.join('+') };
+		}
+		if (pastoId === 'pomeriggio') {
+			if (t.includes('frutta')) return { label: 'Frutta' };
+			return { label: 'Latte' };
+		}
+		if (pastoId === 'sera') {
+			if (t.includes('mini-pappa')) return { label: 'Mini-pappa', opt: true };
+			return { label: 'Latte' };
+		}
+		return { label: raw };
+	}
+
+	/* ---------------- Render: SETTIMANA (colpo d'occhio) ---------------- */
+	function renderSettimana() {
+		const root = document.getElementById('view-settimana');
 		root.innerHTML = '';
 		const todayN = currentDayNumber();
-		const currentWeek = todayN ? D.GIORNI[todayN - 1].settimana : null;
+		const currentWeek = todayN ? D.GIORNI[todayN - 1].settimana : 1;
+		if (!state.viewWeek) state.viewWeek = currentWeek;
+		const w = Math.max(1, Math.min(4, state.viewWeek));
+		const titles = {
+			1: 'Avvio, pranzo unico',
+			2: 'Uovo, poi pesce',
+			3: 'Glutine · legumi',
+			4: 'Arachide · 2ª pappa',
+		};
+		const weekDays = D.GIORNI.filter((g) => g.settimana === w);
+		const first = weekDays[0].giorno;
+		const last = weekDays[weekDays.length - 1].giorno;
+		const dFirst = dateForDay(first);
+		const dLast = dateForDay(last);
 
+		/* Header con selettore settimana */
 		root.appendChild(
-			el('div', { class: 'callout callout--gold' }, [
-				el('h3', {}, ['🛒 Lista della spesa']),
-				el('div', {}, [
-					'Ingredienti per settimana, generati dal piano. Spunta ciò che hai già: le spunte restano salvate.',
+			el('div', { class: 'wk-switch' }, [
+				el('button', {
+					class: 'icon-btn',
+					title: 'Settimana precedente',
+					disabled: w <= 1 ? 'disabled' : null,
+					onClick: () => {
+						state.viewWeek = w - 1;
+						save();
+						render();
+					},
+				}, ['‹']),
+				el('div', { class: 'wk-switch__mid' }, [
+					el('div', { class: 'wk-switch__title' }, [
+						`Settimana ${w}`,
+						w === currentWeek ? el('span', { class: 'badge badge--done', style: 'margin-left:8px;' }, ['in corso']) : null,
+					]),
+					el('div', { class: 'wk-switch__sub' }, [
+						`${titles[w]} · Giorni ${first}-${last}${dFirst ? ' (' + formatDateShort(dFirst) + '–' + formatDateShort(dLast) + ')' : ''}`,
+					]),
 				]),
+				el('button', {
+					class: 'icon-btn',
+					title: 'Settimana successiva',
+					disabled: w >= 4 ? 'disabled' : null,
+					onClick: () => {
+						state.viewWeek = w + 1;
+						save();
+						render();
+					},
+				}, ['›']),
 			]),
 		);
-
-		D.SPESA_SETTIMANE.forEach((wk) => {
-			const isCurrent = wk.settimana === currentWeek;
-			if (!state.shopping[wk.settimana]) state.shopping[wk.settimana] = {};
-			const shopState = state.shopping[wk.settimana];
-
-			const card = el('div', { class: 'card' });
-			card.appendChild(
-				el('div', { class: 'week-head', style: 'margin-bottom:12px;' }, [
-					el('h3', {}, [
-						`Settimana ${wk.settimana}`,
-						isCurrent ? el('span', { class: 'badge badge--done', style: 'margin-left:8px;' }, ['Questa settimana']) : null,
-					]),
-					el('span', { class: 'sub' }, [wk.titolo]),
+		if (w !== currentWeek) {
+			root.appendChild(
+				el('button', { class: 'link-btn', onClick: () => { state.viewWeek = currentWeek; save(); render(); } }, [
+					'↩︎ Torna alla settimana in corso',
 				]),
 			);
-			wk.categorie.forEach((catg) => {
-				card.appendChild(
-					el('div', { class: 'shop-cat' }, [`${catg.emoji} ${catg.nome}`]),
-				);
-				catg.items.forEach((item) => {
-					const key = item;
-					const checked = !!shopState[key];
-					card.appendChild(
-						checkRow({
-							checked,
-							onToggle: () => {
-								shopState[key] = !shopState[key];
-								save();
-								render();
-							},
-							title: [item],
-						}),
-					);
-				});
-			});
-			root.appendChild(card);
-		});
+		}
 
+		/* 1) Cosa mangia — piano pasti compatto dei 7 giorni */
+		root.appendChild(el('div', { class: 'section-title' }, ['Cosa mangia questa settimana']));
+		const planCard = el('div', { class: 'card', style: 'padding:6px 14px;' });
+		weekDays.forEach((g) => {
+			const n = g.giorno;
+			const date = dateForDay(n);
+			const chips = D.PASTI_ORDINE.map((p) => {
+				const s = mealShort(g, p.id);
+				if (!s) return null;
+				return el(
+					'span',
+					{ class: 'meal-chip' + (s.allergen ? ' allergen' : '') + (s.opt ? ' opt' : ''), title: p.label },
+					[el('span', { class: 'me' }, [p.emoji]), s.label],
+				);
+			}).filter(Boolean);
+			planCard.appendChild(
+				el('div', { class: 'day-row', 'data-today': String(n === todayN), onClick: () => navigate('giorno', { day: n }) }, [
+					el('div', { class: 'day-row__day' }, [
+						el('div', { class: 'n' }, [`G${n}`]),
+						date ? el('div', { class: 'd' }, [date.toLocaleDateString('it-IT', { weekday: 'short' })]) : null,
+					]),
+					el('div', { class: 'day-row__meals' }, chips),
+				]),
+			);
+		});
+		root.appendChild(planCard);
+
+		/* 2) Lista della spesa della settimana */
+		root.appendChild(el('div', { class: 'section-title' }, ['Lista della spesa della settimana']));
+		const wk = D.SPESA_SETTIMANE.find((s) => s.settimana === w);
+		if (!state.shopping[w]) state.shopping[w] = {};
+		const shopState = state.shopping[w];
+		let bought = 0;
+		let totalItems = 0;
+		wk.categorie.forEach((c) => c.items.forEach((it) => {
+			totalItems++;
+			if (shopState[it]) bought++;
+		}));
+		const shopCard = el('div', { class: 'card' });
+		shopCard.appendChild(
+			el('div', { class: 'progress-row', style: 'margin-bottom:6px;' }, [
+				el('div', { class: 'bar' }, [el('span', { style: `width:${totalItems ? Math.round((bought / totalItems) * 100) : 0}%` })]),
+				el('span', { class: 'label' }, [`${bought}/${totalItems}`]),
+			]),
+		);
+		wk.categorie.forEach((catg) => {
+			shopCard.appendChild(el('div', { class: 'shop-cat' }, [`${catg.emoji} ${catg.nome}`]));
+			catg.items.forEach((item) => {
+				shopCard.appendChild(
+					checkRow({
+						checked: !!shopState[item],
+						compact: true,
+						onToggle: () => {
+							shopState[item] = !shopState[item];
+							save();
+							render();
+						},
+						title: [item],
+					}),
+				);
+			});
+		});
+		root.appendChild(shopCard);
+
+		/* 3) Preparazione */
 		root.appendChild(el('div', { class: 'section-title' }, ['Preparazione & conservazione']));
 		root.appendChild(
 			el('div', { class: 'card' }, [
@@ -1324,7 +1429,7 @@
 		if (currentView === 'oggi') renderOggi();
 		else if (currentView === 'calendario') renderCalendario();
 		else if (currentView === 'giorno') renderGiorno();
-		else if (currentView === 'spesa') renderSpesa();
+		else if (currentView === 'settimana') renderSettimana();
 		else if (currentView === 'allergeni') renderAllergeni();
 		else if (currentView === 'guida') renderGuida();
 		else if (currentView === 'impostazioni') renderImpostazioni();

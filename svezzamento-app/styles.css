@@ -1031,6 +1031,90 @@ a {
 	box-shadow: var(--shadow-sm);
 }
 
+/* ---------- Vista Settimana (colpo d'occhio) ---------- */
+.wk-switch {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	margin-bottom: var(--sp-3);
+}
+.wk-switch__mid {
+	flex: 1;
+	text-align: center;
+	min-width: 0;
+}
+.wk-switch__title {
+	font-size: 17px;
+	font-weight: 800;
+}
+.wk-switch__sub {
+	font-size: 12px;
+	color: var(--c-text-soft);
+}
+
+.day-row {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+	padding: 10px 6px;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+}
+.day-row + .day-row {
+	border-top: 1px solid var(--c-border);
+}
+.day-row:hover {
+	background: var(--c-surface-2);
+}
+.day-row[data-today='true'] {
+	background: var(--c-primary-soft);
+}
+.day-row__day {
+	flex: 0 0 auto;
+	width: 44px;
+	text-align: center;
+}
+.day-row__day .n {
+	font-size: 14px;
+	font-weight: 800;
+}
+.day-row__day .d {
+	font-size: 10px;
+	color: var(--c-text-soft);
+	text-transform: capitalize;
+}
+.day-row__meals {
+	flex: 1;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	min-width: 0;
+}
+.meal-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11px;
+	font-weight: 600;
+	background: var(--c-surface-2);
+	color: var(--c-text);
+	padding: 3px 8px;
+	border-radius: 999px;
+}
+.meal-chip .me {
+	font-size: 12px;
+}
+.meal-chip.allergen {
+	background: var(--c-warn-soft);
+	color: var(--c-warn);
+	font-weight: 700;
+}
+.meal-chip.opt {
+	opacity: 0.7;
+	border: 1px dashed var(--c-border);
+	background: transparent;
+}
+
 /* ---------- Shopping ---------- */
 .shop-cat {
 	font-size: 12px;
