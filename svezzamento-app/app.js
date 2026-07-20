@@ -456,11 +456,16 @@
 					checked: !!ds.rules[r.id],
 					onToggle: () => toggleRule(n, r.id),
 					title: [el('span', { class: 'emoji' }, [r.icona]), r.titolo],
-					desc: r.dettaglio,
+					compact: true,
 				}),
 			);
 		});
 		frag.appendChild(rulesCard);
+		frag.appendChild(
+			el('button', { class: 'link-btn', style: 'margin-top:-4px;', onClick: () => navigate('guida') }, [
+				'Cosa significano? Vedi la Guida',
+			]),
+		);
 
 		/* Nota personale */
 		frag.appendChild(el('div', { class: 'section-title' }, ['Le mie note']));
@@ -483,7 +488,7 @@
 		const row = el(
 			'div',
 			{
-				class: 'check',
+				class: 'check' + (o.compact ? ' check--compact' : ''),
 				role: 'checkbox',
 				'aria-checked': String(o.checked),
 				tabindex: '0',
@@ -692,53 +697,57 @@
 		);
 
 		const todayN = currentDayNumber();
+
+		/* Legenda compatta */
+		root.appendChild(
+			el('div', { class: 'cal-legend' }, [
+				el('span', {}, [el('span', { class: 'k k--today' }), 'oggi']),
+				el('span', {}, [el('span', { class: 'k k--done' }), 'fatto']),
+				el('span', {}, [el('span', { class: 'k k--allergen' }), 'allergene']),
+				el('span', {}, [el('span', { class: 'k k--new' }), 'novità']),
+			]),
+		);
+
 		const titles = {
 			1: 'Avvio, pranzo unico',
-			2: 'Consolida pranzo · Uovo, poi Pesce',
-			3: 'Glutine · Legumi · mantenimento',
-			4: 'Arachide · 2ª pappa opzionale',
+			2: 'Uovo, poi pesce',
+			3: 'Glutine · legumi',
+			4: 'Arachide · 2ª pappa',
 		};
 		[1, 2, 3, 4].forEach((w) => {
-			const grid = el('div', { class: 'day-grid' });
+			const grid = el('div', { class: 'cal-grid' });
 			D.GIORNI.filter((g) => g.settimana === w).forEach((g) => {
 				const n = g.giorno;
 				const complete = dayComplete(n);
-				const date = dateForDay(n);
+				const hasAllergen = g.allergeni.some((a) => a.osserva);
+				const isNew = !!g.nuovo;
+				const label = `Giorno ${n}${g.nuovo ? ' · ' + g.nuovo : ''}`;
 				grid.appendChild(
 					el(
 						'button',
 						{
-							class: 'day-card',
+							class: 'cal-cell',
 							'data-today': String(n === todayN),
 							'data-complete': String(complete),
+							title: label,
+							'aria-label': label,
 							onClick: () => navigate('giorno', { day: n }),
 						},
 						[
-							el('div', { class: 'day-card__top' }, [
-								el('div', { class: 'day-card__num' }, [
-									`G${n} `,
-									date ? el('small', {}, [formatDateShort(date)]) : null,
-								]),
-								complete ? el('span', { class: 'badge badge--done' }, ['✓']) : null,
-							]),
-							g.nuovo || g.allergeni.length
-								? el('div', { class: 'day-card__badges' }, [
-										...(g.nuovo ? [el('span', { class: 'badge badge--new' }, ['✨ ' + g.nuovo])] : []),
-										...allergenBadges(g),
-								  ])
+							el('span', { class: 'cal-cell__n' }, [String(n)]),
+							hasAllergen
+								? el('span', { class: 'cal-cell__dot allergen' })
+								: isNew
+								? el('span', { class: 'cal-cell__dot new' })
 								: null,
-							el('div', { class: 'day-card__summary' }, [g.pasti.pranzo || g.pasti.mattino || '']),
-							el('div', { class: 'day-card__status' }, [
-								el('span', { class: 'dot' }),
-								complete ? 'Completato' : n === todayN ? 'Oggi' : 'Da fare',
-							]),
+							complete ? el('span', { class: 'cal-cell__check' }, ['✓']) : null,
 						],
 					),
 				);
 			});
 			root.appendChild(
-				el('div', { class: 'week-block' }, [
-					el('div', { class: 'week-head' }, [
+				el('div', { class: 'cal-week' }, [
+					el('div', { class: 'cal-week__label' }, [
 						el('h3', {}, [`Settimana ${w}`]),
 						el('span', { class: 'sub' }, [titles[w]]),
 					]),

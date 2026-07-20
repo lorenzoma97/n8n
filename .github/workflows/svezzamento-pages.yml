@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - master
-      - claude/weaning-calendar-app-bdfw49
     paths:
       - 'svezzamento-app/**'
       - '.github/workflows/svezzamento-pages.yml'
