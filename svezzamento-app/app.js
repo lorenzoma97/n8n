@@ -357,6 +357,25 @@
 		}
 	}
 
+	/* Slittamenti del piano: i dati per giorno restano invariati, cambia solo
+	   quale "giorno" cade oggi (utile se la bimba salta/rimanda un giorno). */
+	function shiftPlan(deltaDays) {
+		if (!state.startDate) return;
+		const d = parseISO(state.startDate);
+		d.setDate(d.getDate() + deltaDays);
+		state.startDate = toISO(d);
+		save();
+		render();
+	}
+	function setTodayAsDay(x) {
+		const n = Math.max(1, Math.min(TOTAL_DAYS, Number(x) || 1));
+		const d = todayMidnight();
+		d.setDate(d.getDate() - (n - 1));
+		state.startDate = toISO(d);
+		save();
+		render();
+	}
+
 	/* Contenuto completo di un giorno (Oggi e dettaglio) */
 	function renderDayContent(n, opts) {
 		opts = opts || {};
@@ -380,6 +399,11 @@
 						el('div', { class: 'bar' }, [el('span', { style: `width:${prog.pct}%` })]),
 						el('span', { class: 'label' }, [`${prog.pct}%`]),
 					]),
+				]),
+			);
+			frag.appendChild(
+				el('button', { class: 'link-btn', onClick: () => navigate('impostazioni') }, [
+					'🗓️ Non è il giorno giusto? Sposta il piano',
 				]),
 			);
 		}
@@ -1063,6 +1087,62 @@
 					el('button', { class: 'btn btn--sm', onClick: () => exportData() }, ['⬇️ Esporta dati']),
 					el('button', { class: 'btn btn--sm btn--soft', onClick: () => importInput.click() }, ['⬆️ Importa dati']),
 					importInput,
+				]),
+			]),
+		);
+
+		/* Piano — slittamenti (se salti o rimandi un giorno) */
+		root.appendChild(el('div', { class: 'section-title' }, ['Piano — se salti o rimandi un giorno']));
+		const dayNow = currentDayNumber();
+		const dayInput = el('input', {
+			type: 'number',
+			min: '1',
+			max: String(TOTAL_DAYS),
+			value: String(dayNow || 1),
+			'aria-label': 'Numero del giorno di oggi',
+			style: 'width:72px;',
+		});
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('p', { class: 'muted', style: 'margin-top:0;' }, [
+					dayNow
+						? `Oggi sei al Giorno ${dayNow}. `
+						: state.startDate
+						? 'Il piano è fuori intervallo (non ancora iniziato o già concluso). '
+						: 'Imposta prima la data di inizio. ',
+					'Se la bambina è stata male o hai rimandato, sposta il piano: i giorni e i dati registrati restano invariati.',
+				]),
+				el('div', { class: 'btn-row' }, [
+					el(
+						'button',
+						{
+							class: 'btn btn--sm btn--soft',
+							title: 'Rimanda: oggi torna al giorno precedente',
+							disabled: state.startDate ? null : 'disabled',
+							onClick: () => shiftPlan(1),
+						},
+						['⏮ Posticipa 1 giorno'],
+					),
+					el(
+						'button',
+						{
+							class: 'btn btn--sm btn--soft',
+							title: 'Anticipa: oggi passa al giorno successivo',
+							disabled: state.startDate ? null : 'disabled',
+							onClick: () => shiftPlan(-1),
+						},
+						['⏭ Anticipa 1 giorno'],
+					),
+				]),
+				el('div', { class: 'setting-row', style: 'margin-top:6px;padding-top:14px;' }, [
+					el('div', {}, [
+						el('strong', {}, ['Segna oggi come giorno']),
+						el('div', { class: 'tiny' }, ['Riallinea il piano a dove sei davvero.']),
+					]),
+					el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [
+						dayInput,
+						el('button', { class: 'btn btn--sm', onClick: () => setTodayAsDay(dayInput.value) }, ['Imposta']),
+					]),
 				]),
 			]),
 		);

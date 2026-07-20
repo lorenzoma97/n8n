@@ -964,10 +964,65 @@ a {
 	border-bottom: none;
 }
 
-/* larger reaction chips for accessibility */
+/* larger reaction chips for accessibility (tap target ~40px) */
 .chip-select button {
-	padding: 7px 12px;
+	padding: 9px 13px;
 	font-size: 13px;
+	min-height: 40px;
+}
+
+/* ---------- Link-style button (affordance discreto) ---------- */
+.link-btn {
+	display: block;
+	width: 100%;
+	text-align: center;
+	background: none;
+	border: none;
+	color: var(--c-primary-ink);
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	padding: 10px;
+	margin: 0 0 var(--sp-3);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+/* ---------- Rifiniture: safe-area, tap target ≥44px ---------- */
+.topbar__inner {
+	padding-top: max(var(--sp-3), env(safe-area-inset-top));
+}
+.icon-btn {
+	width: 44px;
+	height: 44px;
+}
+.nav__btn {
+	min-height: 52px;
+	justify-content: center;
+}
+#settings-btn {
+	font-size: 20px;
+}
+
+/* Contrasto: micro-testo su --c-text-soft invece di faint (WCAG AA) */
+.tiny,
+.day-card__num small {
+	color: var(--c-text-soft);
+}
+
+/* ---------- Focus visibile (navigazione da tastiera) ---------- */
+:focus-visible {
+	outline: 3px solid var(--c-primary);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+.check:focus-visible,
+.day-card:focus-visible {
+	outline: 3px solid var(--c-primary);
+	outline-offset: -1px;
+}
+.hero .link-btn:focus-visible {
+	outline-color: #fff;
 }
 
 /* reduce motion */
