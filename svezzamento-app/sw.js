@@ -1,6 +1,7 @@
-/* Service worker minimale: cache-first per l'uso offline.
-   Bump CACHE ad ogni modifica dei file statici. */
-const CACHE = 'svezzamento-v2';
+/* Service worker: network-first.
+   Mostra SEMPRE l'ultima versione quando si è online (niente più versioni
+   "bloccate" in cache), con fallback alla cache quando si è offline. */
+const CACHE = 'svezzamento-v3';
 const ASSETS = [
 	'.',
 	'index.html',
@@ -29,15 +30,14 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
 	if (event.request.method !== 'GET') return;
 	event.respondWith(
-		caches.match(event.request).then((cached) => {
-			if (cached) return cached;
-			return fetch(event.request)
-				.then((res) => {
-					const copy = res.clone();
-					caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
-					return res;
-				})
-				.catch(() => cached);
-		}),
+		fetch(event.request)
+			.then((res) => {
+				const copy = res.clone();
+				caches.open(CACHE).then((cache) => cache.put(event.request, copy)).catch(() => {});
+				return res;
+			})
+			.catch(() =>
+				caches.match(event.request).then((cached) => cached || caches.match('index.html')),
+			),
 	);
 });
