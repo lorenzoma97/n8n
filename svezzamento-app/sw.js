@@ -1,6 +1,6 @@
 /* Service worker minimale: cache-first per l'uso offline.
    Bump CACHE ad ogni modifica dei file statici. */
-const CACHE = 'svezzamento-v1';
+const CACHE = 'svezzamento-v2';
 const ASSETS = [
 	'.',
 	'index.html',

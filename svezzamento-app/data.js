@@ -565,6 +565,133 @@ const PASTI_ORDINE = [
 	{ id: 'sera', label: 'Sera', emoji: '🌙' },
 ];
 
+/* Lista della spesa per settimana (derivata dal piano) */
+const SPESA_SETTIMANE = [
+	{
+		settimana: 1,
+		titolo: 'Avvio · carne · frutta',
+		categorie: [
+			{
+				nome: 'Cereale (ferro)',
+				emoji: '🌾',
+				items: ['Crema di cereali FORTIFICATA con ferro (etichetta: "Ferro" ~8 mg/100g)'],
+			},
+			{ nome: 'Verdure', emoji: '🥕', items: ['Patate', 'Carote', 'Zucchine'] },
+			{
+				nome: 'Proteine',
+				emoji: '🥩',
+				items: ['Carne omogeneizzata: manzo/vitello (o coniglio/tacchino)'],
+			},
+			{ nome: 'Frutta', emoji: '🍎', items: ['Mela', 'Pera'] },
+			{ nome: 'Dispensa', emoji: '🫒', items: ['Olio EVO', 'Vitamina D 400 UI (farmacia)'] },
+		],
+	},
+	{
+		settimana: 2,
+		titolo: 'Uovo · pesce',
+		categorie: [
+			{ nome: 'Cereale (ferro)', emoji: '🌾', items: ['Crema di cereali fortificata con ferro'] },
+			{ nome: 'Verdure', emoji: '🥕', items: ['Patate', 'Carote', 'Zucchine'] },
+			{ nome: 'Proteine', emoji: '🥩', items: ['Carne (manzo/vitello)'] },
+			{
+				nome: 'Allergeni',
+				emoji: '🥚',
+				items: [
+					'Uova fresche (da cuocere ben sode)',
+					'Pesce bianco basso mercurio: merluzzo/sogliola/platessa',
+				],
+			},
+			{ nome: 'Frutta', emoji: '🍎', items: ['Mela', 'Pera', 'Banana/altra frutta'] },
+			{ nome: 'Dispensa', emoji: '🫒', items: ['Olio EVO'] },
+		],
+	},
+	{
+		settimana: 3,
+		titolo: 'Glutine · legumi',
+		categorie: [
+			{
+				nome: 'Cereale (ferro)',
+				emoji: '🌾',
+				items: [
+					'Crema di cereali fortificata con ferro',
+					'Semolino/multicereale FORTIFICATO con ferro (per il glutine)',
+				],
+			},
+			{ nome: 'Verdure', emoji: '🥕', items: ['Patate', 'Carote', 'Zucchine'] },
+			{ nome: 'Proteine', emoji: '🥩', items: ['Carne (manzo/vitello)', 'Pesce bianco'] },
+			{
+				nome: 'Allergeni',
+				emoji: '🫘',
+				items: ['Lenticchie rosse decorticate (legumi)'],
+			},
+			{
+				nome: 'Vit. C + frutta',
+				emoji: '🍊',
+				items: ['Fonte di vit. C (agrumi/verdura fresca)', 'Frutta assortita'],
+			},
+			{ nome: 'Dispensa', emoji: '🫒', items: ['Olio EVO'] },
+		],
+	},
+	{
+		settimana: 4,
+		titolo: 'Arachide · 2ª pappa',
+		categorie: [
+			{
+				nome: 'Cereale (ferro)',
+				emoji: '🌾',
+				items: ['Crema di cereali fortificata con ferro'],
+			},
+			{ nome: 'Verdure', emoji: '🥕', items: ['Patate', 'Carote', 'Zucchine (extra per mini-pappa)'] },
+			{ nome: 'Proteine', emoji: '🥩', items: ['Carne (manzo/vitello)', 'Pesce bianco'] },
+			{
+				nome: 'Allergeni',
+				emoji: '🥜',
+				items: ['Crema di arachidi 100% liscia (senza zucchero/sale)', 'Uova', 'Lenticchie rosse'],
+			},
+			{ nome: 'Frutta', emoji: '🍎', items: ['Frutta assortita'] },
+			{ nome: 'Dispensa', emoji: '🫒', items: ['Olio EVO'] },
+		],
+	},
+];
+
+/* Consigli di preparazione / conservazione (meal prep) */
+const PREP_TIPS = [
+	'Cuoci le verdure a vapore e passale; in frigo si conservano ≤24-48h.',
+	'Congela brodo e verdure passate in porzioni (cubetti); etichetta con la data.',
+	'Scongela solo la porzione che serve; non ricongelare.',
+	'Aggiungi l\'olio EVO a crudo, a fine cottura.',
+	'L\'allergene del mattino: dose piccola e ben cotta (uovo ben sodo, pesce ben cotto, arachide crema liscia diluita).',
+	'Tieni la vit. C (verdura/frutta fresca) nello stesso pasto di cereali/legumi.',
+];
+
+/* Glossario dei termini usati nell'app */
+const GLOSSARIO = [
+	{
+		termine: 'Mantenimento',
+		def: 'Continuare a proporre un allergene già introdotto, con la frequenza indicata, per conservare la tolleranza.',
+	},
+	{
+		termine: 'Allergene',
+		def: 'Alimento che può dare reazioni; si introduce da solo, al mattino, osservando 2-3 ore.',
+	},
+	{
+		termine: 'Aumento (escalation)',
+		def: 'Aumentare gradualmente la dose di un allergene già tollerato alla prima esposizione.',
+	},
+	{
+		termine: 'Cereale fortificato',
+		def: 'Crema di cereali con ferro aggiunto (voce "Ferro" in etichetta): è il veicolo di ferro principale del mese.',
+	},
+	{
+		termine: 'Ferro non-eme',
+		def: 'Ferro di origine vegetale (cereali, legumi): si assorbe meglio insieme alla vitamina C.',
+	},
+	{
+		termine: 'Pappa base',
+		def: 'Crema di cereali fortificata + verdure passate + proteine + olio EVO + acqua di cottura.',
+	},
+];
+
 window.SVEZZAMENTO_DATA = {
 	GIORNI,
 	REGOLE_FISSE,
@@ -573,4 +700,7 @@ window.SVEZZAMENTO_DATA = {
 	REGOLE_ORO,
 	SEGNALI_ALLARME,
 	PASTI_ORDINE,
+	SPESA_SETTIMANE,
+	PREP_TIPS,
+	GLOSSARIO,
 };

@@ -8,16 +8,21 @@
 	const D = window.SVEZZAMENTO_DATA;
 	const STORAGE_KEY = 'svezzamento.v1';
 	const TOTAL_DAYS = D.GIORNI.length;
+	const OSS_MS = 3 * 60 * 60 * 1000; // finestra osservazione allergene: 3h
 
 	/* ---------------- Stato ---------------- */
 	const defaultState = () => ({
 		startDate: null, // ISO 'YYYY-MM-DD' del giorno 1
 		days: {}, // { [n]: { meals:{}, rules:{}, note:'' } }
-		allergens: {}, // { [id]: { somministrato, reazione, note } }
+		allergens: {}, // { [id]: { somministrato, reazione, reazioneOra, sintomi, ossStart } }
+		shopping: {}, // { [settimana]: { [item]: bool } }
+		zoom: 1, // dimensione testo
+		notif: false, // promemoria browser
 		selectedDay: null,
 	});
 
 	let state = load();
+	let tickInterval = null; // interval per i timer di osservazione
 
 	function load() {
 		try {
@@ -28,7 +33,6 @@
 			return defaultState();
 		}
 	}
-
 	function save() {
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -36,12 +40,15 @@
 			/* storage pieno o disabilitato: l'app resta usabile in memoria */
 		}
 	}
-
 	function dayState(n) {
 		if (!state.days[n]) state.days[n] = { meals: {}, rules: {}, note: '' };
 		if (!state.days[n].meals) state.days[n].meals = {};
 		if (!state.days[n].rules) state.days[n].rules = {};
 		return state.days[n];
+	}
+	function allergenLog(id) {
+		if (!state.allergens[id]) state.allergens[id] = {};
+		return state.allergens[id];
 	}
 
 	/* ---------------- Date helpers ---------------- */
@@ -69,17 +76,25 @@
 	}
 	function formatDate(date) {
 		if (!date) return '';
-		return date.toLocaleDateString('it-IT', {
-			weekday: 'long',
-			day: 'numeric',
-			month: 'long',
-		});
+		return date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 	}
 	function formatDateShort(date) {
 		if (!date) return '';
 		return date.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
 	}
-	/* Numero del giorno-programma corrispondente a oggi (o null se fuori intervallo) */
+	function formatDateTime(iso) {
+		if (!iso) return '';
+		try {
+			return new Date(iso).toLocaleString('it-IT', {
+				day: 'numeric',
+				month: 'short',
+				hour: '2-digit',
+				minute: '2-digit',
+			});
+		} catch (e) {
+			return '';
+		}
+	}
 	function currentDayNumber() {
 		const start = parseISO(state.startDate);
 		if (!start) return null;
@@ -87,6 +102,9 @@
 		const n = diff + 1;
 		if (n < 1 || n > TOTAL_DAYS) return null;
 		return n;
+	}
+	function cap(s) {
+		return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 	}
 
 	/* ---------------- Progress ---------------- */
@@ -139,8 +157,20 @@
 		});
 	}
 
+	/* ---------------- Notifiche ---------------- */
+	function notify(title, body) {
+		if (!state.notif) return;
+		try {
+			if ('Notification' in window && Notification.permission === 'granted') {
+				new Notification(title, { body: body, icon: 'icon.svg' });
+			}
+		} catch (e) {
+			/* no-op */
+		}
+	}
+
 	/* ---------------- Router ---------------- */
-	const views = ['oggi', 'calendario', 'allergeni', 'guida', 'giorno'];
+	const views = ['oggi', 'calendario', 'spesa', 'allergeni', 'guida', 'giorno', 'impostazioni'];
 	let currentView = 'oggi';
 
 	function navigate(view, opts) {
@@ -150,25 +180,72 @@
 			const node = document.getElementById('view-' + v);
 			if (node) node.hidden = v !== view;
 		});
+		const navMap = { giorno: 'calendario' };
+		const activeNav = navMap[view] || view;
 		document.querySelectorAll('.nav__btn').forEach((b) => {
-			const active = b.dataset.view === view || (view === 'giorno' && b.dataset.view === 'calendario');
-			if (active) b.setAttribute('aria-current', 'page');
+			if (b.dataset.view === activeNav) b.setAttribute('aria-current', 'page');
 			else b.removeAttribute('aria-current');
 		});
 		render();
 		window.scrollTo({ top: 0, behavior: 'auto' });
 	}
 
+	/* ---------------- Timer osservazione (tick) ---------------- */
+	function fmtRemaining(ms) {
+		if (ms <= 0) return null;
+		const h = Math.floor(ms / 3600000);
+		const m = Math.floor((ms % 3600000) / 60000);
+		const s = Math.floor((ms % 60000) / 1000);
+		return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+	}
+	function refreshTickers() {
+		if (tickInterval) {
+			clearInterval(tickInterval);
+			tickInterval = null;
+		}
+		const nodes = () => Array.from(document.querySelectorAll('.js-timer[data-end]'));
+		const update = () => {
+			const list = nodes();
+			if (!list.length) {
+				clearInterval(tickInterval);
+				tickInterval = null;
+				return;
+			}
+			const now = Date.now();
+			list.forEach((node) => {
+				const end = Number(node.dataset.end);
+				const remaining = end - now;
+				const bar = node.querySelector('.js-timer-bar');
+				const txt = node.querySelector('.js-timer-text');
+				if (remaining <= 0) {
+					if (txt) txt.textContent = '✅ Osservazione completata (3h)';
+					if (bar) bar.style.width = '100%';
+					node.classList.add('done');
+					if (node.dataset.notified !== '1') {
+						node.dataset.notified = '1';
+						notify('Osservazione completata', 'Sono passate le 3 ore di osservazione.');
+					}
+				} else {
+					const pct = Math.min(100, Math.max(0, (1 - remaining / OSS_MS) * 100));
+					if (bar) bar.style.width = pct.toFixed(1) + '%';
+					if (txt) txt.textContent = 'Mancano ' + fmtRemaining(remaining);
+				}
+			});
+		};
+		if (nodes().length) {
+			update();
+			tickInterval = setInterval(update, 1000);
+		}
+	}
+
 	/* ---------------- Render: OGGI ---------------- */
 	function renderOggi() {
 		const root = document.getElementById('view-oggi');
 		root.innerHTML = '';
-
 		if (!state.startDate) {
 			root.appendChild(renderSetup());
 			return;
 		}
-
 		const n = currentDayNumber();
 		if (n == null) {
 			root.appendChild(renderOutOfRange());
@@ -178,62 +255,96 @@
 	}
 
 	function renderSetup() {
-		const input = el('input', { type: 'date', id: 'start-input' });
-		const wrap = el('div', { class: 'card' }, [
-			el('h2', { style: 'font-size:18px;margin-bottom:8px;' }, ['👋 Benvenuta']),
+		const dateInput = el('input', { type: 'date', id: 'start-input' });
+		dateInput.value = toISO(todayMidnight());
+		const agoInput = el('input', {
+			type: 'number',
+			min: '0',
+			max: '27',
+			value: '0',
+			id: 'ago-input',
+			style: 'width:80px;',
+		});
+
+		const start = (iso) => {
+			state.startDate = iso;
+			save();
+			navigate('oggi');
+		};
+
+		return el('div', { class: 'card' }, [
+			el('h2', { style: 'font-size:18px;margin-bottom:8px;' }, ['👋 Iniziamo']),
 			el('p', { class: 'muted', style: 'margin-top:0;margin-bottom:16px;' }, [
-				'Imposta il giorno in cui inizi (o hai iniziato) lo svezzamento: giorno 1 del calendario. L\'app calcolerà automaticamente a che giorno sei e mostrerà il piano corretto ogni giorno.',
+				'Indica quando è (o è stato) il primo giorno di pappa: il "Giorno 1". L\'app calcolerà da sola a che giorno sei e mostrerà sempre il piano corretto.',
 			]),
-			el('div', { class: 'field' }, [
-				el('label', { for: 'start-input' }, ['Data di inizio (Giorno 1)']),
-				input,
+
+			el('div', { class: 'setup-opt' }, [
+				el('strong', {}, ['① Inizio oggi']),
+				el(
+					'button',
+					{ class: 'btn', onClick: () => start(toISO(todayMidnight())) },
+					['Parti da oggi'],
+				),
 			]),
-			el(
-				'button',
-				{
-					class: 'btn btn--block',
-					onClick: () => {
-						const v = input.value || toISO(todayMidnight());
-						state.startDate = v;
-						save();
-						navigate('oggi');
-					},
-				},
-				['Inizia'],
-			),
-			el('p', { class: 'tiny', style: 'margin-top:12px;text-align:center;' }, [
-				'Se lasci vuoto, parte da oggi.',
+
+			el('div', { class: 'setup-opt' }, [
+				el('div', {}, [
+					el('strong', {}, ['② Ho già iniziato']),
+					el('div', { class: 'tiny' }, ['Quanti giorni fa la prima pappa?']),
+				]),
+				el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [
+					agoInput,
+					el(
+						'button',
+						{
+							class: 'btn',
+							onClick: () => {
+								const n = Math.max(0, Math.min(27, Number(agoInput.value) || 0));
+								const d = todayMidnight();
+								d.setDate(d.getDate() - n);
+								start(toISO(d));
+							},
+						},
+						['Imposta'],
+					),
+				]),
+			]),
+
+			el('div', { class: 'setup-opt' }, [
+				el('div', {}, [
+					el('strong', {}, ['③ Scegli una data']),
+					el('div', { class: 'tiny' }, ['Data del Giorno 1']),
+				]),
+				el('div', { style: 'display:flex;gap:8px;align-items:center;' }, [
+					dateInput,
+					el('button', { class: 'btn', onClick: () => start(dateInput.value || toISO(todayMidnight())) }, [
+						'Imposta',
+					]),
+				]),
 			]),
 		]);
-		input.value = toISO(todayMidnight());
-		return wrap;
 	}
 
 	function renderOutOfRange() {
-		const n = currentDayNumber.__lastComputedNull; // not used; compute explicitly
 		const start = parseISO(state.startDate);
 		const diff = Math.round((todayMidnight() - start) / 86400000) + 1;
 		const notStarted = diff < 1;
-		const finished = diff > TOTAL_DAYS;
-		const card = el('div', { class: 'card' }, [
+		return el('div', { class: 'card' }, [
 			el('h2', { style: 'font-size:18px;margin-bottom:8px;' }, [
 				notStarted ? '⏳ Non ancora iniziato' : '🎉 Programma completato',
 			]),
 			el('p', { class: 'muted' }, [
 				notStarted
-					? `Il Giorno 1 è previsto per ${formatDate(start)}. Nel frattempo puoi consultare il calendario e la guida.`
+					? `Il Giorno 1 è previsto per ${formatDate(start)}. Nel frattempo puoi consultare calendario, spesa e guida.`
 					: `Hai completato i ${TOTAL_DAYS} giorni del 1° mese. Prosegui i mantenimenti (uovo, pesce, arachide, legumi) e programma il controllo Hb/ferritina col pediatra.`,
 			]),
 			el('div', { class: 'btn-row', style: 'margin-top:12px;' }, [
 				el('button', { class: 'btn', onClick: () => navigate('calendario') }, ['Vai al calendario']),
-				el(
-					'button',
-					{ class: 'btn btn--ghost', onClick: () => changeStartDate() },
-					['Cambia data di inizio'],
-				),
+				el('button', { class: 'btn btn--ghost', onClick: () => changeStartDate() }, [
+					'Cambia data di inizio',
+				]),
 			]),
 		]);
-		return card;
 	}
 
 	function changeStartDate() {
@@ -242,12 +353,11 @@
 		if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
 			state.startDate = v;
 			save();
-			render();
-			navigate(currentView);
+			navigate(currentView === 'giorno' ? 'calendario' : currentView);
 		}
 	}
 
-	/* Contenuto completo di un giorno (usato in Oggi e nel dettaglio) */
+	/* Contenuto completo di un giorno (Oggi e dettaglio) */
 	function renderDayContent(n, opts) {
 		opts = opts || {};
 		const g = D.GIORNI[n - 1];
@@ -256,40 +366,31 @@
 		const prog = dayProgress(n);
 		const frag = document.createDocumentFragment();
 
-		/* Hero (solo in vista Oggi) */
 		if (opts.hero) {
-			const hero = el('div', { class: 'hero' }, [
-				el('div', { class: 'hero__eyebrow' }, ['Oggi']),
-				el('div', { class: 'hero__day' }, [`Giorno ${n}`]),
-				el('div', { class: 'hero__date' }, [
-					formatDate(date).charAt(0).toUpperCase() + formatDate(date).slice(1),
+			frag.appendChild(
+				el('div', { class: 'hero' }, [
+					el('div', { class: 'hero__eyebrow' }, ['Oggi']),
+					el('div', { class: 'hero__day' }, [`Giorno ${n}`]),
+					el('div', { class: 'hero__date' }, [cap(formatDate(date))]),
+					el('div', { class: 'hero__meta' }, [
+						el('span', { class: 'badge' }, [`Settimana ${g.settimana}`]),
+						...(g.nuovo ? [el('span', { class: 'badge' }, ['✨ ' + g.nuovo])] : []),
+					]),
+					el('div', { class: 'hero__progress progress-row' }, [
+						el('div', { class: 'bar' }, [el('span', { style: `width:${prog.pct}%` })]),
+						el('span', { class: 'label' }, [`${prog.pct}%`]),
+					]),
 				]),
-				el('div', { class: 'hero__meta' }, [
-					el('span', { class: 'badge' }, [`Settimana ${g.settimana}`]),
-					...(g.nuovo ? [el('span', { class: 'badge' }, ['✨ ' + g.nuovo])] : []),
-				]),
-				el('div', { class: 'hero__progress progress-row' }, [
-					el('div', { class: 'bar' }, [el('span', { style: `width:${prog.pct}%` })]),
-					el('span', { class: 'label' }, [`${prog.pct}%`]),
-				]),
-			]);
-			frag.appendChild(hero);
+			);
 		}
 
-		/* Avviso allergene con osservazione */
-		const osserva = g.allergeni.filter((a) => a.osserva);
-		if (osserva.length) {
-			osserva.forEach((a) => {
-				frag.appendChild(renderAllergenAlert(n, a));
-			});
-		}
+		g.allergeni
+			.filter((a) => a.osserva)
+			.forEach((a) => frag.appendChild(renderAllergenAlert(n, a)));
 
-		/* Nota del giorno (informativa) */
 		if (g.nota) {
 			frag.appendChild(
-				el('div', { class: 'callout callout--gold' }, [
-					el('div', { html: '💡 ' + g.nota }),
-				]),
+				el('div', { class: 'callout callout--gold' }, [el('div', { html: '💡 ' + g.nota })]),
 			);
 		}
 
@@ -301,45 +402,24 @@
 			if (!testo) return;
 			const checked = !!ds.meals[p.id];
 			const allergOfMeal = g.allergeni.filter((a) => a.momento === p.id);
-			const row = el(
-				'div',
-				{
-					class: 'check',
-					role: 'checkbox',
-					'aria-checked': String(checked),
-					tabindex: '0',
-					'data-checked': String(checked),
-					onClick: () => toggleMeal(n, p.id),
-					onKeydown: (e) => {
-						if (e.key === 'Enter' || e.key === ' ') {
-							e.preventDefault();
-							toggleMeal(n, p.id);
-						}
-					},
-				},
-				[
-					el('span', { class: 'check__box', html: CHECK_SVG }),
-					el('div', { class: 'check__main' }, [
-						el('div', { class: 'check__title' }, [
-							el('span', { class: 'emoji' }, [p.emoji]),
-							el('span', { class: 'meal-momento' }, [p.label]),
-							...allergOfMeal.map((a) =>
-								el(
-									'span',
-									{
-										class:
-											'badge ' +
-											(a.tipo === 'mantenimento' ? 'badge--maint' : 'badge--allergen'),
-									},
-									[(a.tipo === 'mantenimento' ? '↻ ' : '⚠ ') + a.nome],
-								),
+			mealsCard.appendChild(
+				checkRow({
+					checked,
+					onToggle: () => toggleMeal(n, p.id),
+					title: [
+						el('span', { class: 'emoji' }, [p.emoji]),
+						el('span', { class: 'meal-momento' }, [p.label]),
+						...allergOfMeal.map((a) =>
+							el(
+								'span',
+								{ class: 'badge ' + (a.tipo === 'mantenimento' ? 'badge--maint' : 'badge--allergen') },
+								[(a.tipo === 'mantenimento' ? '↻ ' : '⚠ ') + a.nome],
 							),
-						]),
-						el('div', { class: 'check__desc' }, [testo]),
-					]),
-				],
+						),
+					],
+					desc: testo,
+				}),
 			);
-			mealsCard.appendChild(row);
 		});
 		frag.appendChild(mealsCard);
 
@@ -347,35 +427,14 @@
 		frag.appendChild(el('div', { class: 'section-title' }, ['Regole fisse di ogni giorno']));
 		const rulesCard = el('div', { class: 'card', style: 'padding:6px;' });
 		D.REGOLE_FISSE.forEach((r) => {
-			const checked = !!ds.rules[r.id];
-			const row = el(
-				'div',
-				{
-					class: 'check',
-					role: 'checkbox',
-					'aria-checked': String(checked),
-					tabindex: '0',
-					'data-checked': String(checked),
-					onClick: () => toggleRule(n, r.id),
-					onKeydown: (e) => {
-						if (e.key === 'Enter' || e.key === ' ') {
-							e.preventDefault();
-							toggleRule(n, r.id);
-						}
-					},
-				},
-				[
-					el('span', { class: 'check__box', html: CHECK_SVG }),
-					el('div', { class: 'check__main' }, [
-						el('div', { class: 'check__title' }, [
-							el('span', { class: 'emoji' }, [r.icona]),
-							r.titolo,
-						]),
-						el('div', { class: 'check__desc' }, [r.dettaglio]),
-					]),
-				],
+			rulesCard.appendChild(
+				checkRow({
+					checked: !!ds.rules[r.id],
+					onToggle: () => toggleRule(n, r.id),
+					title: [el('span', { class: 'emoji' }, [r.icona]), r.titolo],
+					desc: r.dettaglio,
+				}),
 			);
-			rulesCard.appendChild(row);
 		});
 		frag.appendChild(rulesCard);
 
@@ -395,53 +454,175 @@
 		return frag;
 	}
 
+	/* Riga checkbox riutilizzabile */
+	function checkRow(o) {
+		const row = el(
+			'div',
+			{
+				class: 'check',
+				role: 'checkbox',
+				'aria-checked': String(o.checked),
+				tabindex: '0',
+				'data-checked': String(o.checked),
+				onClick: o.onToggle,
+				onKeydown: (e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						o.onToggle();
+					}
+				},
+			},
+			[
+				el('span', { class: 'check__box', html: CHECK_SVG }),
+				el('div', { class: 'check__main' }, [
+					el('div', { class: 'check__title' }, o.title),
+					o.desc ? el('div', { class: 'check__desc' }, [o.desc]) : null,
+				]),
+			],
+		);
+		return row;
+	}
+
+	/* Avviso allergene con timer di osservazione + log reazione */
 	function renderAllergenAlert(n, a) {
 		const id = `${a.nome}-g${n}`;
-		const log = state.allergens[id] || {};
+		const log = allergenLog(id);
 		const wrap = el('div', { class: 'alert alert--warn' });
-		wrap.appendChild(
-			el('div', { class: 'alert__head' }, [`⚠️ Allergene al mattino: ${a.nome}`]),
-		);
+		wrap.appendChild(el('div', { class: 'alert__head' }, [`⚠️ Allergene al mattino: ${a.nome}`]));
 		wrap.appendChild(
 			el('div', { class: 'alert__body' }, [
 				a.tipo === 'escalation'
-					? 'Aumento della dose. Somministra al mattino e osserva 2-3 ore (orticaria, gonfiore labbra/volto, vomito, difficoltà respiratoria).'
+					? 'Aumento della dose. Somministra al mattino e osserva 2-3 ore.'
 					: 'Nuovo allergene: somministra al mattino, in giornata tranquilla, e osserva 2-3 ore. Un solo alimento nuovo per volta.',
 			]),
 		);
+
+		/* Timer osservazione */
+		wrap.appendChild(renderObsTimer(id));
+		/* Log reazione + eventuale sintomatologia */
 		wrap.appendChild(renderAllergenLog(id, a.nome));
 		return wrap;
 	}
 
-	/* Widget di log reazione riutilizzabile */
+	function renderObsTimer(id) {
+		const log = allergenLog(id);
+		if (!log.ossStart) {
+			return el('div', { class: 'obs-timer' }, [
+				el(
+					'button',
+					{
+						class: 'btn btn--sm',
+						onClick: () => {
+							log.ossStart = Date.now();
+							save();
+							render();
+						},
+					},
+					['▶ Avvia osservazione (3h)'],
+				),
+				el('span', { class: 'tiny', style: 'margin-left:8px;' }, ['2h minimo · 3h consigliato']),
+			]);
+		}
+		const end = log.ossStart + OSS_MS;
+		const done = Date.now() >= end;
+		return el('div', { class: 'obs-timer' }, [
+			el('div', { class: 'obs-timer__row' }, [
+				el(
+					'div',
+					{ class: 'js-timer' + (done ? ' done' : ''), 'data-end': String(end) },
+					[
+						el('div', { class: 'bar' }, [
+							el('span', { class: 'js-timer-bar', style: 'width:0%' }),
+						]),
+						el('div', { class: 'js-timer-text tiny', style: 'margin-top:4px;font-weight:700;' }, [
+							done ? '✅ Osservazione completata (3h)' : '…',
+						]),
+					],
+				),
+				el(
+					'button',
+					{
+						class: 'btn btn--ghost btn--sm',
+						title: 'Azzera timer',
+						onClick: () => {
+							delete log.ossStart;
+							save();
+							render();
+						},
+					},
+					['↺'],
+				),
+			]),
+		]);
+	}
+
+	/* Widget log reazione (con sintomi + ora + guida se reazione) */
 	function renderAllergenLog(id, nome) {
-		const log = state.allergens[id] || {};
+		const log = allergenLog(id);
 		const setReaction = (val) => {
-			state.allergens[id] = Object.assign({}, state.allergens[id], {
-				somministrato: true,
-				reazione: val,
-			});
+			log.somministrato = true;
+			log.reazione = val;
+			log.reazioneOra = new Date().toISOString();
 			save();
 			render();
 		};
 		const opt = (val, cls, label) =>
 			el(
 				'button',
-				{
-					class: cls,
-					'aria-pressed': String(log.reazione === val),
-					onClick: () => setReaction(val),
-				},
+				{ class: cls, 'aria-pressed': String(log.reazione === val), onClick: () => setReaction(val) },
 				[label],
 			);
-		return el('div', { class: 'allergen-item__log' }, [
-			el('span', { class: 'tiny', style: 'font-weight:700;' }, ['Reazione:']),
-			el('div', { class: 'chip-select' }, [
-				opt('nessuna', 'ok', '✅ Nessuna'),
-				opt('lieve', 'mild', '⚠️ Lieve'),
-				opt('grave', 'bad', '🚨 Grave'),
+
+		const children = [
+			el('div', { class: 'allergen-item__log' }, [
+				el('span', { class: 'tiny', style: 'font-weight:700;' }, ['Reazione:']),
+				el('div', { class: 'chip-select' }, [
+					opt('nessuna', 'ok', '✅ Nessuna'),
+					opt('lieve', 'mild', '⚠️ Lieve'),
+					opt('grave', 'bad', '🚨 Grave'),
+				]),
+				log.reazioneOra
+					? el('span', { class: 'tiny' }, ['ore ' + formatDateTime(log.reazioneOra)])
+					: null,
 			]),
-		]);
+		];
+
+		/* Guida in base alla reazione */
+		if (log.reazione === 'grave') {
+			children.push(
+				el('div', { class: 'callout callout--danger', style: 'margin:10px 0 0;' }, [
+					el('h3', {}, ['🚨 Reazione grave — agisci ora']),
+					el('div', {}, [
+						'Sospendi SUBITO questo alimento e contatta il pediatra / il 112 in caso di gonfiore labbra-volto, vomito ripetuto o difficoltà respiratoria. NON ritardare gli altri allergeni già tollerati.',
+					]),
+				]),
+			);
+		} else if (log.reazione === 'lieve') {
+			children.push(
+				el('div', { class: 'callout callout--gold', style: 'margin:10px 0 0;' }, [
+					el('div', {}, [
+						'Reazione lieve: osserva l\'evoluzione. Se peggiora o si ripete, sospendi l\'alimento e senti il pediatra prima di riproporlo.',
+					]),
+				]),
+			);
+		}
+
+		/* Note sintomi se reazione lieve/grave */
+		if (log.reazione === 'lieve' || log.reazione === 'grave') {
+			const st = el('textarea', {
+				class: 'note-field',
+				style: 'margin-top:10px;min-height:48px;',
+				placeholder: 'Sintomi osservati (es. rossore attorno alla bocca, ponfi, feci…)',
+			});
+			st.value = log.sintomi || '';
+			st.addEventListener('input', () => {
+				log.sintomi = st.value;
+				save();
+			});
+			children.push(st);
+		}
+
+		return el('div', {}, children);
 	}
 
 	function toggleMeal(n, key) {
@@ -462,80 +643,74 @@
 		const root = document.getElementById('view-calendario');
 		root.innerHTML = '';
 
-		/* Barra di riepilogo */
 		let completed = 0;
 		for (let i = 1; i <= TOTAL_DAYS; i++) if (dayComplete(i)) completed++;
 		const pct = Math.round((completed / TOTAL_DAYS) * 100);
 		root.appendChild(
 			el('div', { class: 'card' }, [
-				el('div', { style: 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;' }, [
-					el('strong', {}, ['Avanzamento generale']),
-					el('span', { class: 'muted' }, [`${completed}/${TOTAL_DAYS} giorni`]),
-				]),
+				el(
+					'div',
+					{ style: 'display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;' },
+					[el('strong', {}, ['Avanzamento generale']), el('span', { class: 'muted' }, [`${completed}/${TOTAL_DAYS} giorni`])],
+				),
 				el('div', { class: 'progress-row' }, [
 					el('div', { class: 'bar' }, [el('span', { style: `width:${pct}%` })]),
 					el('span', { class: 'label' }, [`${pct}%`]),
 				]),
-				state.startDate
-					? el('div', { class: 'btn-row', style: 'margin-top:12px;' }, [
-							el('button', { class: 'btn btn--ghost', onClick: () => changeStartDate() }, [
+				el('div', { class: 'btn-row', style: 'margin-top:12px;' }, [
+					state.startDate
+						? el('button', { class: 'btn btn--ghost btn--sm', onClick: () => changeStartDate() }, [
 								'Cambia data di inizio',
-							]),
-					  ])
-					: el('div', { class: 'btn-row', style: 'margin-top:12px;' }, [
-							el('button', { class: 'btn', onClick: () => navigate('oggi') }, [
-								'Imposta data di inizio',
-							]),
-					  ]),
+						  ])
+						: el('button', { class: 'btn btn--sm', onClick: () => navigate('oggi') }, ['Imposta data di inizio']),
+				]),
 			]),
 		);
 
 		const todayN = currentDayNumber();
-		const weeks = [1, 2, 3, 4];
-		weeks.forEach((w) => {
-			const daysOfWeek = D.GIORNI.filter((g) => g.settimana === w);
-			const titles = {
-				1: 'Avvio, pranzo unico',
-				2: 'Consolida pranzo · Uovo, poi Pesce',
-				3: 'Glutine · Legumi · mantenimento',
-				4: 'Arachide · 2ª pappa opzionale',
-			};
+		const titles = {
+			1: 'Avvio, pranzo unico',
+			2: 'Consolida pranzo · Uovo, poi Pesce',
+			3: 'Glutine · Legumi · mantenimento',
+			4: 'Arachide · 2ª pappa opzionale',
+		};
+		[1, 2, 3, 4].forEach((w) => {
 			const grid = el('div', { class: 'day-grid' });
-			daysOfWeek.forEach((g) => {
+			D.GIORNI.filter((g) => g.settimana === w).forEach((g) => {
 				const n = g.giorno;
 				const complete = dayComplete(n);
 				const date = dateForDay(n);
-				const summary = g.pasti.pranzo || g.pasti.mattino || '';
-				const card = el(
-					'button',
-					{
-						class: 'day-card',
-						'data-today': String(n === todayN),
-						'data-complete': String(complete),
-						onClick: () => navigate('giorno', { day: n }),
-					},
-					[
-						el('div', { class: 'day-card__top' }, [
-							el('div', { class: 'day-card__num' }, [
-								`G${n} `,
-								date ? el('small', {}, [formatDateShort(date)]) : null,
+				grid.appendChild(
+					el(
+						'button',
+						{
+							class: 'day-card',
+							'data-today': String(n === todayN),
+							'data-complete': String(complete),
+							onClick: () => navigate('giorno', { day: n }),
+						},
+						[
+							el('div', { class: 'day-card__top' }, [
+								el('div', { class: 'day-card__num' }, [
+									`G${n} `,
+									date ? el('small', {}, [formatDateShort(date)]) : null,
+								]),
+								complete ? el('span', { class: 'badge badge--done' }, ['✓']) : null,
 							]),
-							complete ? el('span', { class: 'badge badge--done' }, ['✓']) : null,
-						]),
-						g.nuovo || g.allergeni.length
-							? el('div', { class: 'day-card__badges' }, [
-									...(g.nuovo ? [el('span', { class: 'badge badge--new' }, ['✨ ' + g.nuovo])] : []),
-									...allergenBadges(g),
-							  ])
-							: null,
-						el('div', { class: 'day-card__summary' }, [summary]),
-						el('div', { class: 'day-card__status' }, [
-							el('span', { class: 'dot' }),
-							complete ? 'Completato' : n === todayN ? 'Oggi' : 'Da fare',
-						]),
-					],
+							g.nuovo || g.allergeni.length
+								? el('div', { class: 'day-card__badges' }, [
+										...(g.nuovo ? [el('span', { class: 'badge badge--new' }, ['✨ ' + g.nuovo])] : []),
+										...allergenBadges(g),
+								  ])
+								: null,
+							el('div', { class: 'day-card__summary' }, [g.pasti.pranzo || g.pasti.mattino || '']),
+							el('div', { class: 'day-card__status' }, [
+								el('span', { class: 'dot' }),
+								complete ? 'Completato' : n === todayN ? 'Oggi' : 'Da fare',
+							]),
+						],
+					),
 				);
-				grid.appendChild(card);
 			});
 			root.appendChild(
 				el('div', { class: 'week-block' }, [
@@ -556,30 +731,90 @@
 		const n = state.selectedDay || 1;
 		const g = D.GIORNI[n - 1];
 		const date = dateForDay(n);
+		root.appendChild(
+			el('div', { class: 'detail-head' }, [
+				el('button', { class: 'icon-btn', title: 'Torna al calendario', onClick: () => navigate('calendario') }, ['←']),
+				el('div', { class: 'detail-head__title' }, [
+					el('h2', {}, [`Giorno ${n}`]),
+					el('div', { class: 'sub' }, [`Settimana ${g.settimana}${date ? ' · ' + formatDate(date) : ''}`]),
+				]),
+				el('button', {
+					class: 'icon-btn',
+					title: 'Giorno precedente',
+					disabled: n <= 1 ? 'disabled' : null,
+					onClick: () => n > 1 && navigate('giorno', { day: n - 1 }),
+				}, ['‹']),
+				el('button', {
+					class: 'icon-btn',
+					title: 'Giorno successivo',
+					disabled: n >= TOTAL_DAYS ? 'disabled' : null,
+					onClick: () => n < TOTAL_DAYS && navigate('giorno', { day: n + 1 }),
+				}, ['›']),
+			]),
+		);
+		root.appendChild(renderDayContent(n, { hero: false }));
+	}
 
-		const head = el('div', { class: 'detail-head' }, [
-			el('button', { class: 'icon-btn', title: 'Torna al calendario', onClick: () => navigate('calendario') }, ['←']),
-			el('div', { class: 'detail-head__title' }, [
-				el('h2', {}, [`Giorno ${n}`]),
-				el('div', { class: 'sub' }, [
-					`Settimana ${g.settimana}${date ? ' · ' + formatDate(date) : ''}`,
+	/* ---------------- Render: SPESA ---------------- */
+	function renderSpesa() {
+		const root = document.getElementById('view-spesa');
+		root.innerHTML = '';
+		const todayN = currentDayNumber();
+		const currentWeek = todayN ? D.GIORNI[todayN - 1].settimana : null;
+
+		root.appendChild(
+			el('div', { class: 'callout callout--gold' }, [
+				el('h3', {}, ['🛒 Lista della spesa']),
+				el('div', {}, [
+					'Ingredienti per settimana, generati dal piano. Spunta ciò che hai già: le spunte restano salvate.',
 				]),
 			]),
-			el('button', {
-				class: 'icon-btn',
-				title: 'Giorno precedente',
-				disabled: n <= 1 ? 'disabled' : null,
-				onClick: () => n > 1 && navigate('giorno', { day: n - 1 }),
-			}, ['‹']),
-			el('button', {
-				class: 'icon-btn',
-				title: 'Giorno successivo',
-				disabled: n >= TOTAL_DAYS ? 'disabled' : null,
-				onClick: () => n < TOTAL_DAYS && navigate('giorno', { day: n + 1 }),
-			}, ['›']),
-		]);
-		root.appendChild(head);
-		root.appendChild(renderDayContent(n, { hero: false }));
+		);
+
+		D.SPESA_SETTIMANE.forEach((wk) => {
+			const isCurrent = wk.settimana === currentWeek;
+			if (!state.shopping[wk.settimana]) state.shopping[wk.settimana] = {};
+			const shopState = state.shopping[wk.settimana];
+
+			const card = el('div', { class: 'card' });
+			card.appendChild(
+				el('div', { class: 'week-head', style: 'margin-bottom:12px;' }, [
+					el('h3', {}, [
+						`Settimana ${wk.settimana}`,
+						isCurrent ? el('span', { class: 'badge badge--done', style: 'margin-left:8px;' }, ['Questa settimana']) : null,
+					]),
+					el('span', { class: 'sub' }, [wk.titolo]),
+				]),
+			);
+			wk.categorie.forEach((catg) => {
+				card.appendChild(
+					el('div', { class: 'shop-cat' }, [`${catg.emoji} ${catg.nome}`]),
+				);
+				catg.items.forEach((item) => {
+					const key = item;
+					const checked = !!shopState[key];
+					card.appendChild(
+						checkRow({
+							checked,
+							onToggle: () => {
+								shopState[key] = !shopState[key];
+								save();
+								render();
+							},
+							title: [item],
+						}),
+					);
+				});
+			});
+			root.appendChild(card);
+		});
+
+		root.appendChild(el('div', { class: 'section-title' }, ['Preparazione & conservazione']));
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('ul', { class: 'bullet' }, D.PREP_TIPS.map((t) => el('li', {}, [t]))),
+			]),
+		);
 	}
 
 	/* ---------------- Render: ALLERGENI ---------------- */
@@ -587,7 +822,6 @@
 		const root = document.getElementById('view-allergeni');
 		root.innerHTML = '';
 
-		/* Regola d'oro spaziatura */
 		root.appendChild(
 			el('div', { class: 'callout callout--gold' }, [
 				el('h3', {}, ['🕐 Regola della spaziatura']),
@@ -597,47 +831,40 @@
 			]),
 		);
 
-		/* Elenco allergeni con stato introduzione */
 		root.appendChild(el('div', { class: 'section-title' }, ['Allergeni e stato']));
 		const card = el('div', { class: 'card' });
 		D.ALLERGENI_RIEPILOGO.forEach((a) => {
-			const introDay = a.prima;
-			const introId = introDayAllergenId(a.nome, introDay);
+			const introId = introDayAllergenId(a.nome, a.prima);
 			const log = introId ? state.allergens[introId] : null;
 			const introdotto = log && log.somministrato;
-			const introDate = dateForDay(introDay);
+			const introDate = dateForDay(a.prima);
 			const stato = introdotto
-				? el('span', { class: 'badge badge--done' }, [
-						reactionLabel(log.reazione) || '✓ Introdotto',
-				  ])
+				? el('span', { class: 'badge badge--done' }, [reactionLabel(log.reazione) || '✓ Introdotto'])
 				: el('span', { class: 'badge badge--week' }, ['Da introdurre']);
-
-			const item = el('div', { class: 'allergen-item' }, [
-				el('div', { class: 'allergen-item__emoji' }, [a.emoji]),
-				el('div', { class: 'allergen-item__main' }, [
-					el('div', { class: 'allergen-item__name' }, [a.nome, stato]),
-					el('div', { class: 'allergen-item__meta' }, [
-						`1ª esposizione: Giorno ${a.prima}${introDate ? ' (' + formatDateShort(introDate) + ')' : ''} · ${a.orario}`,
+			card.appendChild(
+				el('div', { class: 'allergen-item' }, [
+					el('div', { class: 'allergen-item__emoji' }, [a.emoji]),
+					el('div', { class: 'allergen-item__main' }, [
+						el('div', { class: 'allergen-item__name' }, [a.nome, stato]),
+						el('div', { class: 'allergen-item__meta' }, [
+							`1ª esposizione: Giorno ${a.prima}${introDate ? ' (' + formatDateShort(introDate) + ')' : ''} · ${a.orario}`,
+						]),
+						el('div', { class: 'allergen-item__meta', title: 'Mantenimento: continuare a proporlo per conservare la tolleranza' }, [
+							`Mantenimento: ${a.mantenimento}`,
+						]),
+						introId
+							? renderAllergenLog(introId, a.nome)
+							: el('div', { class: 'tiny', style: 'margin-top:6px;' }, ['Non un allergene: è la fonte principale di ferro.']),
 					]),
-					el('div', { class: 'allergen-item__meta' }, [`Mantenimento: ${a.mantenimento}`]),
-					introId
-						? renderAllergenLog(introId, a.nome)
-						: el('div', { class: 'tiny', style: 'margin-top:6px;' }, [
-								'Non un allergene: è la fonte principale di ferro.',
-						  ]),
 				]),
-			]);
-			card.appendChild(item);
+			);
 		});
 		root.appendChild(card);
 
-		/* Diario completo delle somministrazioni allergene registrate */
 		root.appendChild(el('div', { class: 'section-title' }, ['Calendario allergeni (28 giorni)']));
 		const tl = el('div', { class: 'card' });
-		let any = false;
 		D.GIORNI.forEach((g) => {
 			g.allergeni.forEach((a) => {
-				any = true;
 				const id = `${a.nome}-g${g.giorno}`;
 				const log = state.allergens[id] || {};
 				const date = dateForDay(g.giorno);
@@ -647,33 +874,21 @@
 						el('div', { class: 'allergen-item__main' }, [
 							el('div', { class: 'allergen-item__name' }, [
 								`${a.nome} · Giorno ${g.giorno}`,
-								el(
-									'span',
-									{ class: 'badge ' + (a.tipo === 'mantenimento' ? 'badge--maint' : 'badge--allergen') },
-									[tipoLabel(a.tipo)],
-								),
+								el('span', { class: 'badge ' + (a.tipo === 'mantenimento' ? 'badge--maint' : 'badge--allergen') }, [tipoLabel(a.tipo)]),
 							]),
 							el('div', { class: 'allergen-item__meta' }, [
-								`${cap(a.momento)}${date ? ' · ' + formatDateShort(date) : ''}${
-									log.reazione ? ' · ' + (reactionLabel(log.reazione) || '') : ''
-								}`,
+								`${cap(a.momento)}${date ? ' · ' + formatDateShort(date) : ''}${log.reazione ? ' · ' + (reactionLabel(log.reazione) || '') : ''}`,
 							]),
 						]),
 						el(
 							'button',
-							{
-								class: 'icon-btn',
-								title: 'Apri il giorno',
-								style: 'width:34px;height:34px;font-size:15px;',
-								onClick: () => navigate('giorno', { day: g.giorno }),
-							},
+							{ class: 'icon-btn', title: 'Apri il giorno', style: 'width:34px;height:34px;font-size:15px;', onClick: () => navigate('giorno', { day: g.giorno }) },
 							['→'],
 						),
 					]),
 				);
 			});
 		});
-		if (!any) tl.appendChild(el('p', { class: 'muted' }, ['Nessun allergene programmato.']));
 		root.appendChild(tl);
 	}
 
@@ -694,9 +909,6 @@
 		if (t === 'escalation') return 'Aumento';
 		return 'Mantenimento';
 	}
-	function cap(s) {
-		return s.charAt(0).toUpperCase() + s.slice(1);
-	}
 	function emojiFor(nome) {
 		const m = D.ALLERGENI_RIEPILOGO.find((a) => a.nome === nome);
 		return m ? m.emoji : '•';
@@ -705,7 +917,7 @@
 	/* ---------------- Render: GUIDA ---------------- */
 	function renderGuida() {
 		const root = document.getElementById('view-guida');
-		if (root.dataset.built === '1') return; // statica: costruisci una sola volta
+		if (root.dataset.built === '1') return;
 		root.innerHTML = '';
 
 		root.appendChild(
@@ -725,7 +937,6 @@
 		);
 
 		root.appendChild(el('div', { class: 'section-title' }, ['Note operative']));
-		const notesCard = el('div', { class: 'card' });
 		const ul = el('ul', { class: 'rule-list' });
 		D.NOTE_OPERATIVE.forEach((n, i) => {
 			ul.appendChild(
@@ -735,26 +946,16 @@
 				]),
 			);
 		});
-		notesCard.appendChild(ul);
-		root.appendChild(notesCard);
+		root.appendChild(el('div', { class: 'card' }, [ul]));
 
-		root.appendChild(el('div', { class: 'section-title' }, ['Riepilogo allergeni']));
-		const allCard = el('div', { class: 'card' });
-		D.ALLERGENI_RIEPILOGO.forEach((a) => {
-			allCard.appendChild(
-				el('div', { class: 'allergen-item' }, [
-					el('div', { class: 'allergen-item__emoji' }, [a.emoji]),
-					el('div', { class: 'allergen-item__main' }, [
-						el('div', { class: 'allergen-item__name' }, [a.nome]),
-						el('div', { class: 'allergen-item__meta' }, [
-							`1ª: Giorno ${a.prima} · ${a.orario}`,
-						]),
-						el('div', { class: 'allergen-item__meta' }, [`Mantenimento: ${a.mantenimento}`]),
-					]),
-				]),
+		root.appendChild(el('div', { class: 'section-title' }, ['Glossario']));
+		const gl = el('div', { class: 'card' });
+		D.GLOSSARIO.forEach((g) => {
+			gl.appendChild(
+				el('div', { class: 'gloss' }, [el('strong', {}, [g.termine]), el('span', {}, [g.def])]),
 			);
 		});
-		root.appendChild(allCard);
+		root.appendChild(gl);
 
 		root.appendChild(el('div', { class: 'section-title' }, ['Quando fermarsi e sentire il pediatra']));
 		root.appendChild(
@@ -770,8 +971,248 @@
 				'Strumento di supporto: va adattato alla crescita e alla storia clinica della bambina in accordo col pediatra curante.',
 			]),
 		);
-
 		root.dataset.built = '1';
+	}
+
+	/* ---------------- Render: IMPOSTAZIONI ---------------- */
+	function renderImpostazioni() {
+		const root = document.getElementById('view-impostazioni');
+		root.innerHTML = '';
+
+		/* Dimensione testo */
+		const zoomBtn = (val, label) =>
+			el(
+				'button',
+				{
+					'aria-pressed': String((state.zoom || 1) === val),
+					onClick: () => {
+						state.zoom = val;
+						applyZoom();
+						save();
+						render();
+					},
+				},
+				[label],
+			);
+		root.appendChild(el('div', { class: 'section-title' }, ['Dimensione testo']));
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('div', { class: 'seg' }, [
+					zoomBtn(1, 'Normale'),
+					zoomBtn(1.15, 'Grande'),
+					zoomBtn(1.3, 'Molto grande'),
+				]),
+			]),
+		);
+
+		/* Promemoria */
+		root.appendChild(el('div', { class: 'section-title' }, ['Promemoria']));
+		const notifState = 'Notification' in window ? Notification.permission : 'unsupported';
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('p', { class: 'muted', style: 'margin-top:0;' }, [
+					'Ricevi un avviso del browser al termine dell\'osservazione allergene (funziona mentre l\'app è aperta o installata).',
+				]),
+				notifState === 'unsupported'
+					? el('p', { class: 'tiny' }, ['Notifiche non supportate su questo browser.'])
+					: el('div', { class: 'btn-row' }, [
+							el(
+								'button',
+								{
+									class: 'btn btn--sm',
+									onClick: async () => {
+										try {
+											const perm = await Notification.requestPermission();
+											state.notif = perm === 'granted';
+										} catch (e) {
+											state.notif = false;
+										}
+										save();
+										render();
+									},
+								},
+								[state.notif && notifState === 'granted' ? '✅ Promemoria attivi' : 'Attiva promemoria'],
+							),
+					  ]),
+			]),
+		);
+
+		/* Diario per il pediatra */
+		root.appendChild(el('div', { class: 'section-title' }, ['Diario per il pediatra']));
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('p', { class: 'muted', style: 'margin-top:0;' }, [
+					'Raccoglie reazioni agli allergeni e note giornaliere in una pagina stampabile (o da salvare in PDF).',
+				]),
+				el('div', { class: 'btn-row' }, [
+					el('button', { class: 'btn btn--sm', onClick: () => exportDiario() }, ['🖨️ Apri diario stampabile']),
+				]),
+			]),
+		);
+
+		/* Backup */
+		root.appendChild(el('div', { class: 'section-title' }, ['Backup dei dati']));
+		const importInput = el('input', { type: 'file', accept: 'application/json,.json', style: 'display:none;' });
+		importInput.addEventListener('change', (e) => importData(e.target.files && e.target.files[0]));
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('p', { class: 'muted', style: 'margin-top:0;' }, [
+					'Esporta un file con tutti i tuoi dati (spunte, note, reazioni) per salvarli o passarli all\'altro genitore; poi importalo sull\'altro telefono.',
+				]),
+				el('div', { class: 'btn-row' }, [
+					el('button', { class: 'btn btn--sm', onClick: () => exportData() }, ['⬇️ Esporta dati']),
+					el('button', { class: 'btn btn--sm btn--soft', onClick: () => importInput.click() }, ['⬆️ Importa dati']),
+					importInput,
+				]),
+			]),
+		);
+
+		/* Data di inizio + reset */
+		root.appendChild(el('div', { class: 'section-title' }, ['Altro']));
+		root.appendChild(
+			el('div', { class: 'card' }, [
+				el('div', { class: 'setting-row' }, [
+					el('div', {}, [
+						el('strong', {}, ['Data di inizio']),
+						el('div', { class: 'tiny' }, [
+							state.startDate ? cap(formatDate(parseISO(state.startDate))) : 'Non impostata',
+						]),
+					]),
+					el('button', { class: 'btn btn--ghost btn--sm', onClick: () => changeStartDate() }, ['Cambia']),
+				]),
+				el('div', { class: 'setting-row' }, [
+					el('div', {}, [
+						el('strong', {}, ['Azzera tutti i dati']),
+						el('div', { class: 'tiny' }, ['Cancella spunte, note e reazioni. Irreversibile.']),
+					]),
+					el('button', { class: 'btn btn--ghost btn--sm', onClick: () => resetData() }, ['Azzera']),
+				]),
+			]),
+		);
+
+		root.appendChild(
+			el('div', { class: 'disclaimer' }, [
+				'Tutti i dati restano sul tuo dispositivo (nessun account, nessun server).',
+			]),
+		);
+	}
+
+	function applyZoom() {
+		try {
+			document.documentElement.style.zoom = String(state.zoom || 1);
+		} catch (e) {
+			/* no-op */
+		}
+	}
+
+	/* ---------------- Diario / Export / Import ---------------- */
+	function exportDiario() {
+		const rows = [];
+		D.GIORNI.forEach((g) => {
+			g.allergeni.forEach((a) => {
+				const id = `${a.nome}-g${g.giorno}`;
+				const log = state.allergens[id];
+				if (log && (log.reazione || log.somministrato)) {
+					const date = dateForDay(g.giorno);
+					rows.push(
+						`<tr><td>G${g.giorno}${date ? ' · ' + formatDateShort(date) : ''}</td><td>${a.nome} (${tipoLabel(a.tipo)})</td><td>${
+							reactionLabel(log.reazione) || 'somministrato'
+						}</td><td>${log.reazioneOra ? formatDateTime(log.reazioneOra) : ''}</td><td>${escapeHtml(log.sintomi || '')}</td></tr>`,
+					);
+				}
+			});
+		});
+		const notes = [];
+		Object.keys(state.days || {}).forEach((k) => {
+			const nd = state.days[k];
+			if (nd && nd.note && nd.note.trim()) {
+				const date = dateForDay(Number(k));
+				notes.push(`<tr><td>G${k}${date ? ' · ' + formatDateShort(date) : ''}</td><td>${escapeHtml(nd.note)}</td></tr>`);
+			}
+		});
+
+		const html = `<!doctype html><html lang="it"><head><meta charset="utf-8">
+<title>Diario svezzamento</title>
+<style>
+ body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#222;max-width:800px;margin:24px auto;padding:0 16px;}
+ h1{font-size:20px;} h2{font-size:15px;margin-top:24px;border-bottom:2px solid #4a8c6f;padding-bottom:4px;}
+ table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+ th,td{border:1px solid #ddd;padding:6px 8px;text-align:left;vertical-align:top;}
+ th{background:#f0ede4;} .muted{color:#666;font-size:12px;}
+ @media print{button{display:none;}}
+</style></head><body>
+ <h1>🍼 Diario svezzamento</h1>
+ <p class="muted">Inizio: ${state.startDate ? cap(formatDate(parseISO(state.startDate))) : '—'} · Generato per la visita pediatrica.</p>
+ <button onclick="window.print()" style="padding:8px 14px;border:none;background:#4a8c6f;color:#fff;border-radius:6px;font-weight:700;cursor:pointer;">🖨️ Stampa / Salva PDF</button>
+ <h2>Allergeni e reazioni</h2>
+ ${rows.length ? `<table><thead><tr><th>Giorno</th><th>Allergene</th><th>Esito</th><th>Ora</th><th>Sintomi</th></tr></thead><tbody>${rows.join('')}</tbody></table>` : '<p class="muted">Nessuna somministrazione registrata.</p>'}
+ <h2>Note giornaliere</h2>
+ ${notes.length ? `<table><thead><tr><th>Giorno</th><th>Nota</th></tr></thead><tbody>${notes.join('')}</tbody></table>` : '<p class="muted">Nessuna nota.</p>'}
+ <p class="muted" style="margin-top:24px;">Strumento di supporto, non sostituisce il parere del pediatra.</p>
+</body></html>`;
+
+		const win = window.open('', '_blank');
+		if (win) {
+			win.document.open();
+			win.document.write(html);
+			win.document.close();
+		} else {
+			// popup bloccato: fallback download
+			downloadBlob(html, 'diario-svezzamento.html', 'text/html');
+		}
+	}
+
+	function escapeHtml(s) {
+		return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+	}
+
+	function downloadBlob(content, filename, type) {
+		try {
+			const blob = new Blob([content], { type: type || 'application/octet-stream' });
+			const url = URL.createObjectURL(blob);
+			const a = el('a', { href: url, download: filename });
+			document.body.appendChild(a);
+			a.click();
+			setTimeout(() => {
+				document.body.removeChild(a);
+				URL.revokeObjectURL(url);
+			}, 0);
+		} catch (e) {
+			window.alert('Impossibile esportare su questo browser.');
+		}
+	}
+
+	function exportData() {
+		const payload = JSON.stringify(state, null, 2);
+		const stamp = toISO(todayMidnight());
+		downloadBlob(payload, `svezzamento-backup-${stamp}.json`, 'application/json');
+	}
+
+	function importData(file) {
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			try {
+				const data = JSON.parse(String(reader.result));
+				if (typeof data !== 'object' || data === null) throw new Error('formato');
+				state = Object.assign(defaultState(), data);
+				save();
+				applyZoom();
+				window.alert('Dati importati correttamente.');
+				navigate('oggi');
+			} catch (e) {
+				window.alert('File non valido: impossibile importare.');
+			}
+		};
+		reader.readAsText(file);
+	}
+
+	function resetData() {
+		if (!window.confirm('Azzerare TUTTI i dati (spunte, note, reazioni, data di inizio)? Operazione irreversibile.')) return;
+		state = defaultState();
+		save();
+		applyZoom();
+		navigate('oggi');
 	}
 
 	/* ---------------- Render dispatcher ---------------- */
@@ -779,18 +1220,23 @@
 		if (currentView === 'oggi') renderOggi();
 		else if (currentView === 'calendario') renderCalendario();
 		else if (currentView === 'giorno') renderGiorno();
+		else if (currentView === 'spesa') renderSpesa();
 		else if (currentView === 'allergeni') renderAllergeni();
 		else if (currentView === 'guida') renderGuida();
+		else if (currentView === 'impostazioni') renderImpostazioni();
+		refreshTickers();
 	}
 
 	/* ---------------- Init ---------------- */
 	function init() {
+		applyZoom();
 		document.querySelectorAll('.nav__btn').forEach((b) => {
 			b.addEventListener('click', () => navigate(b.dataset.view));
 		});
+		const gear = document.getElementById('settings-btn');
+		if (gear) gear.addEventListener('click', () => navigate('impostazioni'));
 		navigate('oggi');
 
-		/* Service worker (funziona solo su http/https, non su file://) */
 		if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 			navigator.serviceWorker.register('sw.js').catch(() => {});
 		}

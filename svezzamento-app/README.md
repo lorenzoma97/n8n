@@ -24,8 +24,22 @@ backend né la build di n8n.
   (es. arachide ≥3×/sett), regola della spaziatura ≥48-72h e diario completo
   delle somministrazioni con reazione registrata.
 - **Guida** — regole d'oro, ricetta della pappa base, note operative (etichetta
-  cereale = ferro, controllo Hb/ferritina, proteine, conservazione) e i segnali
-  per fermarsi e sentire il pediatra.
+  cereale = ferro, controllo Hb/ferritina, proteine, conservazione), **glossario**
+  dei termini e i segnali per fermarsi e sentire il pediatra.
+- **Spesa** — lista della spesa per settimana generata dal piano (con spunte
+  salvate) e checklist di **preparazione/conservazione** (cubetti freezer, brodo).
+- **Impostazioni** (⚙️) — **timer di osservazione** allergene con promemoria,
+  **dimensione testo** (accessibilità), **backup Esporta/Importa** dei dati (per
+  passarli tra i due telefoni dei genitori), **diario stampabile** per il
+  pediatra (reazioni + note, salvabile in PDF), cambio data di inizio e reset.
+
+### Gestione allergeni
+
+- **Onboarding guidato**: "inizio oggi", "ho già iniziato N giorni fa" o data
+  scelta.
+- **Timer di osservazione 2-3h** con conto alla rovescia e notifica al termine.
+- **Reazione azionabile**: selezionando *Grave* compare la guida d'emergenza,
+  con *Lieve/Grave* si annotano **sintomi + ora**; tutto confluisce nel diario.
 
 ## Come si usa
 

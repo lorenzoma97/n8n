@@ -816,6 +816,160 @@ a {
 	}
 }
 
+/* ---------- Nav a 5 voci (mobile) ---------- */
+.nav__btn {
+	font-size: 10px;
+}
+.nav__btn .ico {
+	font-size: 18px;
+}
+@media (min-width: 400px) {
+	.nav__btn {
+		font-size: 11px;
+	}
+}
+
+/* ---------- Buttons extra ---------- */
+.btn--sm {
+	padding: 8px 12px;
+	font-size: 13px;
+}
+.btn--soft {
+	background: var(--c-surface-2);
+	color: var(--c-text);
+}
+
+/* ---------- Setup options ---------- */
+.setup-opt {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	padding: var(--sp-3) 0;
+	border-top: 1px solid var(--c-border);
+	flex-wrap: wrap;
+}
+.setup-opt:first-of-type {
+	border-top: none;
+}
+.setup-opt input[type='number'],
+.setup-opt input[type='date'] {
+	border: 1px solid var(--c-border);
+	background: var(--c-bg-2);
+	color: var(--c-text);
+	border-radius: var(--radius-sm);
+	padding: 8px 10px;
+	font-family: inherit;
+	font-size: 15px;
+}
+
+/* ---------- Observation timer ---------- */
+.obs-timer {
+	margin-top: var(--sp-3);
+	padding-top: var(--sp-3);
+	border-top: 1px dashed color-mix(in srgb, var(--c-warn) 40%, transparent);
+}
+.obs-timer__row {
+	display: flex;
+	align-items: center;
+	gap: var(--sp-3);
+}
+.obs-timer__row .js-timer {
+	flex: 1;
+}
+.js-timer .bar > span {
+	background: var(--c-warn);
+}
+.js-timer.done .bar > span {
+	background: var(--c-primary);
+}
+.js-timer.done .js-timer-text {
+	color: var(--c-primary-ink);
+}
+
+/* ---------- Segmented control (dimensione testo) ---------- */
+.seg {
+	display: flex;
+	gap: 4px;
+	background: var(--c-surface-2);
+	padding: 4px;
+	border-radius: var(--radius-sm);
+}
+.seg button {
+	flex: 1;
+	border: none;
+	background: transparent;
+	color: var(--c-text-soft);
+	font-weight: 600;
+	font-size: 13px;
+	padding: 10px 8px;
+	border-radius: var(--radius-sm);
+}
+.seg button[aria-pressed='true'] {
+	background: var(--c-surface);
+	color: var(--c-text);
+	box-shadow: var(--shadow-sm);
+}
+
+/* ---------- Shopping ---------- */
+.shop-cat {
+	font-size: 12px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--c-primary-ink);
+	margin: var(--sp-3) 0 2px;
+	padding-left: var(--sp-2);
+}
+.shop-cat:first-child {
+	margin-top: 0;
+}
+.bullet {
+	margin: 0;
+	padding-left: 20px;
+	font-size: 14px;
+}
+.bullet li {
+	margin-bottom: 6px;
+}
+
+/* ---------- Glossary ---------- */
+.gloss {
+	padding: var(--sp-3) 0;
+	border-bottom: 1px solid var(--c-border);
+	font-size: 14px;
+}
+.gloss:last-child {
+	border-bottom: none;
+}
+.gloss strong {
+	display: block;
+	margin-bottom: 2px;
+}
+.gloss span {
+	color: var(--c-text-soft);
+	font-size: 13px;
+}
+
+/* ---------- Settings rows ---------- */
+.setting-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--sp-3);
+	padding: var(--sp-3) 0;
+	border-bottom: 1px solid var(--c-border);
+}
+.setting-row:last-child {
+	border-bottom: none;
+}
+
+/* larger reaction chips for accessibility */
+.chip-select button {
+	padding: 7px 12px;
+	font-size: 13px;
+}
+
 /* reduce motion */
 @media (prefers-reduced-motion: reduce) {
 	* {
