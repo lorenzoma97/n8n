@@ -6,6 +6,7 @@ name: Deploy svezzamento-app to GitHub Pages
 on:
   push:
     branches:
+      - master
       - claude/weaning-calendar-app-bdfw49
     paths:
       - 'svezzamento-app/**'
