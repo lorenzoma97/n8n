@@ -6,38 +6,51 @@
  * NB: strumento di supporto, NON sostituisce il parere del pediatra curante.
  */
 
-/* Regole fisse: valgono TUTTI i 28 giorni. Sono la checklist quotidiana. */
+/* Regole fisse: valgono TUTTI i 28 giorni.
+ * pasto: a quale pasto "appartiene" la regola (folded lì nella vista Oggi);
+ *        null = vale per tutta la giornata (blocco separato).
+ * breve: etichetta corta per la chip sotto il pasto. */
 const REGOLE_FISSE = [
 	{
 		id: 'vitD',
 		icona: '💧',
+		pasto: null,
+		breve: 'Vitamina D',
 		titolo: 'Vitamina D 400 UI (10 µg)',
-		dettaglio: '1×/die, tutti i giorni. Conferma prodotto/dose col pediatra.',
+		dettaglio: '1 volta al giorno, tutti i giorni. Conferma prodotto e dose col pediatra.',
 	},
 	{
 		id: 'cereale',
 		icona: '🌾',
-		titolo: 'Cereale SEMPRE fortificato con ferro',
+		pasto: 'pranzo',
+		breve: 'cereale con ferro',
+		titolo: 'Cereale con ferro',
 		dettaglio:
-			'In ogni pappa principale. Verifica in etichetta la voce "Ferro" (~8 mg/100g, es. Nestlé MIO). È il veicolo di ferro n.1 del mese: non deve mai mancare.',
+			'In ogni pappa. Verifica in etichetta la voce "Ferro" (~8 mg/100g, es. Nestlé MIO): è il veicolo di ferro n.1 del mese.',
 	},
 	{
 		id: 'vitC',
 		icona: '🍊',
-		titolo: 'Fonte di vitamina C nello stesso pasto',
+		pasto: 'pranzo',
+		breve: '+ vit C',
+		titolo: 'Fonte di vitamina C',
 		dettaglio:
-			'Verdura/frutta fresca insieme a cereale/legumi → potenzia l\'assorbimento del ferro non-eme fino a 3-6×.',
+			'Verdura/frutta fresca nello stesso pasto di cereale/legumi: aiuta ad assorbire molto più ferro.',
 	},
 	{
 		id: 'olio',
 		icona: '🫒',
-		titolo: 'Olio EVO ~5 g (1 cucchiaino) a crudo',
-		dettaglio: 'In ogni pappa principale.',
+		pasto: 'pranzo',
+		breve: '+ olio 5g',
+		titolo: 'Olio EVO ~5 g (1 cucchiaino)',
+		dettaglio: 'A crudo, in ogni pappa.',
 	},
 	{
 		id: 'poppate',
 		icona: '🍼',
-		titolo: 'Allattamento a richiesta (~4-6 poppate/die)',
+		pasto: null,
+		breve: 'Poppate',
+		titolo: 'Allattamento a richiesta (~4-6 al giorno)',
 		dettaglio: 'La pappa integra, non sostituisce le poppate in queste settimane.',
 	},
 ];
@@ -73,7 +86,7 @@ const GIORNI = [
 		settimana: 1,
 		pasti: {
 			mattino: 'Latte',
-			pranzo: 'Come g.1, 7-8 cucchiaini se gradita.',
+			pranzo: 'Stessa pappa di ieri; arriva a 7-8 cucchiaini se gradita.',
 			pomeriggio: 'Latte',
 			sera: 'Latte',
 		},
@@ -186,7 +199,7 @@ const GIORNI = [
 		},
 		nuovo: 'UOVO',
 		allergeni: [{ nome: 'Uovo', momento: 'mattino', tipo: 'nuovo', osserva: true }],
-		nota: 'Primo allergene al mattino, in giornata tranquilla. Osserva 2-3 ore prima di procedere.',
+		nota: null,
 	},
 	{
 		giorno: 11,
@@ -205,7 +218,7 @@ const GIORNI = [
 		giorno: 12,
 		settimana: 2,
 		pasti: {
-			mattino: 'UOVO 1 cucchiaino (se g.10 ok). Osserva.',
+			mattino: 'UOVO 1 cucchiaino, se la prima prova è andata bene. Osserva 2-3h, poi latte.',
 			pranzo: 'Pappa base + carne 20 g.',
 			pomeriggio: 'Frutta 60 g.',
 			sera: 'Latte',
@@ -360,7 +373,7 @@ const GIORNI = [
 		nuovo: 'ARACHIDE',
 		allergeni: [{ nome: 'Arachide', momento: 'mattino', tipo: 'nuovo', osserva: true }],
 		nota:
-			'Solo crema 100% liscia diluita, MAI frutta a guscio intera o in pezzi (rischio soffocamento). Target LEAP: ≥3 somministrazioni/settimana.',
+			'Solo crema 100% liscia e diluita, MAI frutta a guscio intera o in pezzi (rischio soffocamento). Obiettivo: arachide almeno 3 volte a settimana.',
 	},
 	{
 		giorno: 23,
@@ -383,7 +396,7 @@ const GIORNI = [
 		giorno: 24,
 		settimana: 4,
 		pasti: {
-			mattino: 'ARACHIDE ½-1 cucchiaino (se g.22 ok). Osserva.',
+			mattino: 'ARACHIDE ½-1 cucchiaino, se la prima prova è andata bene. Osserva 2-3h, poi latte.',
 			pranzo: 'Pappa base + carne 20 g + legumi 10 g + fonte di vit. C.',
 			pomeriggio: 'Frutta 80 g.',
 			sera: 'Mini-pappa 100-120 g (opzionale).',
@@ -425,7 +438,7 @@ const GIORNI = [
 			{ nome: 'Arachide', momento: 'mattino', tipo: 'mantenimento', osserva: false },
 			{ nome: 'Pesce', momento: 'pranzo', tipo: 'mantenimento', osserva: false },
 		],
-		nota: 'Con oggi l\'arachide raggiunge ≥3 somministrazioni nella settimana (g.22, 24, 26).',
+		nota: 'Con oggi l\'arachide raggiunge le 3 volte a settimana (giorni 22, 24, 26).',
 	},
 	{
 		giorno: 27,
@@ -453,53 +466,73 @@ const GIORNI = [
 		seraOpzionale: true,
 		nuovo: null,
 		allergeni: [{ nome: 'Arachide', momento: 'mattino', tipo: 'mantenimento', osserva: false }],
-		nota: 'Fine del 1° mese. Prosegui i mantenimenti e programma il controllo Hb/ferritina.',
+		nota: 'Fine del 1° mese. Prosegui i mantenimenti e prenota l\'esame del sangue per il ferro (emoglobina e ferritina).',
 	},
 ];
 
-/* Riepilogo allergeni per la vista dedicata */
+/* Riepilogo allergeni per la vista dedicata.
+ * allergeneVero: false per la carne (non è un allergene, è la fonte di ferro).
+ * freqBreve/quando: usati nella tabella dei mantenimenti a fine programma. */
 const ALLERGENI_RIEPILOGO = [
 	{
 		nome: 'Carne',
 		emoji: '🥩',
+		allergeneVero: false,
 		prima: 3,
 		orario: 'Pranzo',
+		quando: 'a pranzo',
+		freqBreve: 'quasi ogni pranzo',
 		mantenimento: 'Ogni pranzo (chiave del ferro, non un allergene)',
 	},
 	{
 		nome: 'Uovo',
 		emoji: '🥚',
+		allergeneVero: true,
 		prima: 10,
 		orario: 'Mattino',
-		mantenimento: '~2×/sett (g.17, 21, 23, 25)',
+		quando: 'al mattino',
+		freqBreve: '2 volte a settimana',
+		mantenimento: '~2 volte a settimana (giorni 17, 21, 23, 25)',
 	},
 	{
 		nome: 'Pesce',
 		emoji: '🐟',
+		allergeneVero: true,
 		prima: 14,
 		orario: 'Mattino',
-		mantenimento: '1-2×/sett (basso mercurio)',
+		quando: 'a pranzo',
+		freqBreve: '1-2 volte a settimana',
+		mantenimento: '1-2 volte a settimana (a basso mercurio)',
 	},
 	{
 		nome: 'Glutine',
 		emoji: '🌾',
+		allergeneVero: true,
 		prima: 16,
 		orario: 'Mattino',
-		mantenimento: 'Regolare (via cereale fortificato)',
+		quando: 'nella pappa',
+		freqBreve: 'ad ogni pappa',
+		mantenimento: 'Regolare, tramite il cereale fortificato',
 	},
 	{
 		nome: 'Legumi',
 		emoji: '🫘',
+		allergeneVero: true,
 		prima: 17,
 		orario: 'Pranzo',
-		mantenimento: '2-3×/sett (decorticati/passati)',
+		quando: 'a pranzo',
+		freqBreve: '2-3 volte a settimana',
+		mantenimento: '2-3 volte a settimana (decorticati e passati)',
 	},
 	{
 		nome: 'Arachide',
 		emoji: '🥜',
+		allergeneVero: true,
 		prima: 22,
 		orario: 'Mattino',
-		mantenimento: '≥3×/sett (g.22, 24, 26, 28)',
+		quando: 'al mattino',
+		freqBreve: 'almeno 3 volte a settimana',
+		mantenimento: 'Almeno 3 volte a settimana (giorni 22, 24, 26, 28)',
 	},
 ];
 
@@ -511,9 +544,9 @@ const NOTE_OPERATIVE = [
 			'Deve riportare "Ferro" (~8 mg/100g, es. Nestlé MIO). NON usare creme "prime" senza ferro (Plasmon crema di riso, Mellin/Humana multicereali dichiarano solo vitamine B/C). Per il glutine, semolino FORTIFICATO (Nestlé MIO Semolino), non semolino comune.',
 	},
 	{
-		titolo: 'Il ferro resta sotto fabbisogno',
+		titolo: 'Il ferro resta sotto il fabbisogno',
 		testo:
-			'Anche col calendario corretto, il ferro assorbito del 1° mese resta ~25-41% del fabbisogno: è la condizione attesa del lattante allattato al seno. Programma un controllo Hb/ferritina; se Hb <11 g/dL o ferritina bassa → supplementazione marziale (1 mg/kg/die) col pediatra.',
+			'Anche seguendo tutto alla lettera, nel 1° mese il ferro assorbito copre solo ~25-41% del fabbisogno: è normale nel bimbo allattato al seno. Prenota l\'esame del sangue per il ferro (emoglobina e ferritina); se sono bassi, il pediatra può prescrivere un\'integrazione di ferro (1 mg per kg al giorno).',
 	},
 	{
 		titolo: 'Vitamina C',
@@ -530,7 +563,7 @@ const NOTE_OPERATIVE = [
 	},
 	{
 		titolo: 'Poppate',
-		testo: '4-6/die a richiesta; la pappa integra, non sostituisce.',
+		testo: '4-6 al giorno a richiesta; la pappa integra, non sostituisce.',
 	},
 ];
 
@@ -675,8 +708,8 @@ const GLOSSARIO = [
 		def: 'Alimento che può dare reazioni; si introduce da solo, al mattino, osservando 2-3 ore.',
 	},
 	{
-		termine: 'Aumento (escalation)',
-		def: 'Aumentare gradualmente la dose di un allergene già tollerato alla prima esposizione.',
+		termine: 'Aumento della dose',
+		def: 'La seconda volta di un allergene: se la prima prova è andata bene, si aumenta un po\' la dose.',
 	},
 	{
 		termine: 'Cereale fortificato',
@@ -692,6 +725,49 @@ const GLOSSARIO = [
 	},
 ];
 
+/* Guida rapida d'emergenza (scheda SOS + banner reazione grave) */
+const EMERGENZA = {
+	urgente: [
+		'Difficoltà a respirare, respiro rumoroso o sibilante',
+		'Gonfiore di labbra, lingua o volto',
+		'Bambina molto pallida, floscia o che non reagisce bene',
+		'Vomito ripetuto o collasso subito dopo il pasto',
+	],
+	pediatra: [
+		'Orticaria o ponfi diffusi sulla pelle',
+		'Rossore o eruzione importante attorno alla bocca',
+		'Vomito o diarrea isolati dopo il nuovo alimento',
+		'Qualsiasi reazione che ti preoccupa',
+	],
+	regola:
+		'Sospendi SUBITO solo l\'alimento sospetto. Gli altri allergeni già tollerati proseguono come da piano.',
+};
+
+/* Ricetta della pappa base (scheda a portata di tap dal pranzo) */
+const PAPPA_BASE = {
+	titolo: 'Pappa base (~150 g)',
+	ingredienti: [
+		'Crema di cereali fortificata con ferro (2 cucchiai)',
+		'Verdure passate: patata + carota + zucchina (~150 g)',
+		'La proteina del giorno (carne / pesce / legumi)',
+		'Olio EVO 1 cucchiaino (~5 g), a crudo',
+		'Acqua di cottura q.b.',
+	],
+	nota: 'Texture liscia e frullata, senza sale né zucchero.',
+};
+
+/* Mappa "dove trovo cosa" (onboarding + Guida) */
+const DOVE_TROVO = [
+	{ icona: '☀️', nome: 'Oggi', desc: 'Cosa dare adesso, pasto per pasto' },
+	{ icona: '🗓️', nome: 'Calendario', desc: 'I 28 giorni a colpo d\'occhio' },
+	{ icona: '📋', nome: 'Settimana', desc: 'Piano dei pasti + lista della spesa' },
+	{ icona: '⚠️', nome: 'Allergeni', desc: 'Cosa è stato introdotto e le reazioni' },
+	{ icona: '📖', nome: 'Guida', desc: 'Regole, ricetta e segnali d\'allarme' },
+];
+
+/* Allergeni "veri" (per il codice colore del calendario: la carne è esclusa) */
+const REAL_ALLERGENS = ['Uovo', 'Pesce', 'Glutine', 'Legumi', 'Arachide'];
+
 window.SVEZZAMENTO_DATA = {
 	GIORNI,
 	REGOLE_FISSE,
@@ -703,4 +779,8 @@ window.SVEZZAMENTO_DATA = {
 	SPESA_SETTIMANE,
 	PREP_TIPS,
 	GLOSSARIO,
+	EMERGENZA,
+	PAPPA_BASE,
+	DOVE_TROVO,
+	REAL_ALLERGENS,
 };

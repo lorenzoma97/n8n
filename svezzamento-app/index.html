@@ -9,7 +9,7 @@
 		<meta name="theme-color" content="#4a8c6f" />
 		<meta
 			name="description"
-			content="App per seguire il calendario di svezzamento di 28 giorni: pasti, regole quotidiane, allergeni e note."
+			content="App per seguire il calendario di svezzamento di 28 giorni: pasti, regole quotidiane, allergeni e spesa."
 		/>
 		<title>Svezzamento · Calendario 28 giorni</title>
 		<link rel="manifest" href="manifest.webmanifest" />
@@ -21,13 +21,16 @@
 		<header class="topbar">
 			<div class="topbar__inner">
 				<span class="topbar__logo" aria-hidden="true">🍼</span>
-				<div>
+				<div class="topbar__titles">
 					<div class="topbar__title">Svezzamento</div>
-					<div class="topbar__subtitle">Calendario 28 giorni · post-QA</div>
+					<div class="topbar__subtitle" id="header-sub">Calendario 28 giorni</div>
 				</div>
 				<span class="topbar__spacer"></span>
+				<span id="timer-chip" class="topbar__timer" hidden></span>
+				<button id="sos-btn" class="sos-btn" type="button" title="Emergenza" aria-label="Emergenza">🚨</button>
 				<button id="settings-btn" class="icon-btn" type="button" title="Impostazioni" aria-label="Impostazioni">⚙️</button>
 			</div>
+			<div id="global-banner" class="global-banner"></div>
 		</header>
 
 		<nav class="nav" aria-label="Navigazione principale">

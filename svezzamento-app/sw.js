@@ -1,7 +1,7 @@
 /* Service worker: network-first.
    Mostra SEMPRE l'ultima versione quando si è online (niente più versioni
    "bloccate" in cache), con fallback alla cache quando si è offline. */
-const CACHE = 'svezzamento-v3';
+const CACHE = 'svezzamento-v4';
 const ASSETS = [
 	'.',
 	'index.html',
